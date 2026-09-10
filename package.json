@@ -1,0 +1,29 @@
+{
+  "name": "kabbak-bot",
+  "version": "1.1.0",
+  "description": "KABBAK chat bot (Discord and Matrix; Telegram adapter can plug into the same command core)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "register": "node register-commands.js"
+  },
+  "keywords": [
+    "discord",
+    "telegram",
+    "matrix",
+    "bot",
+    "kabbak",
+    "tarot",
+    "occult"
+  ],
+  "type": "commonjs",
+  "dependencies": {
+    "axios": "^1.19.0",
+    "discord.js": "^14.27.0",
+    "dotenv": "^17.4.2",
+    "jimp": "^0.22.12",
+    "matrix-bot-sdk": "^0.6.6",
+    "sharp": "^0.35.4"
+  }
+}
