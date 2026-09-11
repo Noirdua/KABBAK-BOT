@@ -22,8 +22,11 @@
     "axios": "^1.19.0",
     "discord.js": "^14.27.0",
     "dotenv": "^17.4.2",
-    "jimp": "^0.22.12",
+    "jimp": "0.22.12",
     "matrix-bot-sdk": "^0.6.6",
     "sharp": "^0.35.4"
+  },
+  "overrides": {
+    "jimp": "0.22.12"
   }
 }
