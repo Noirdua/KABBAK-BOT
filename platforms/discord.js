@@ -247,7 +247,7 @@ async function handleChatCommand(interaction) {
 }
 
 async function start() {
-  const token = process.env.DISCORD_TOKEN;
+  const token = String(process.env.DISCORD_TOKEN || '').trim();
   if (!token) return null;
 
   const client = new Client({

@@ -3,16 +3,30 @@ require('dotenv').config();
 const { API_BASE } = require('./lib/kabbak-api');
 const { warmup } = require('./lib/catalog');
 
+function readEnv(name, ...aliases) {
+  for (const key of [name, ...aliases]) {
+    const value = String(process.env[key] || '').trim();
+    if (value) return value;
+  }
+  return '';
+}
+
 async function main() {
   await warmup();
   const starters = [];
 
-  if (process.env.DISCORD_TOKEN) {
+  const discordToken = readEnv('DISCORD_TOKEN');
+  const matrixHome = readEnv('MATRIX_HOMESERVER', 'MATRIX_URL');
+  console.log(`[config] Discord token: ${discordToken ? 'set' : 'NOT set'}; Matrix homeserver: ${matrixHome ? 'set' : 'not set'} (Matrix is optional)`);
+
+  if (discordToken) {
     try {
       starters.push(require('./platforms/discord').start());
     } catch (error) {
       console.error('Discord failed to start:', error?.message || error);
     }
+  } else {
+    console.warn('[config] DISCORD_TOKEN is empty in .env — Discord will not start.');
   }
 
   // if (process.env.TELEGRAM_BOT_TOKEN) starters.push(require('./platforms/telegram').start());
@@ -27,7 +41,7 @@ async function main() {
   }
 
   if (!starters.length) {
-    console.error('No chat platform configured. Set DISCORD_TOKEN and/or MATRIX_HOMESERVER with MATRIX_ACCESS_TOKEN or MATRIX_PASSWORD.');
+    console.error('No chat platform configured. Set DISCORD_TOKEN for Discord, and/or MATRIX_HOMESERVER (or MATRIX_URL) plus MATRIX_ACCESS_TOKEN or MATRIX_PASSWORD for Matrix.');
     process.exit(1);
   }
 
