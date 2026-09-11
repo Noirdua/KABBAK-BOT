@@ -1,6 +1,53 @@
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
+
+// matrix-bot-sdk eagerly loads its native E2EE crypto module, but that binary is
+// platform-specific and its installer swallows download failures. The bot never
+// uses encrypted rooms (it only warns on them), so if the native module is
+// missing we substitute a no-op stub and keep the SDK usable for plain
+// messaging. CryptoClient is only constructed when a crypto store is passed, and
+// the bot never passes one.
+function installMatrixCryptoFallback() {
+  if (process.env.KABBAK_MATRIX_STUB_CRYPTO === '1') {
+    // Escape hatch / testing: force the stub even when the binary exists.
+  } else {
+    try {
+      require('@matrix-org/matrix-sdk-crypto-nodejs');
+      return;
+    } catch (_error) {
+      // Fall through and install the stub below.
+    }
+  }
+
+  const stubCache = new Map();
+  const stub = new Proxy({}, {
+    get(_target, property) {
+      if (property === '__esModule') return true;
+      if (typeof property === 'symbol') return undefined;
+      if (!stubCache.has(property)) {
+        const noop = function matrixCryptoStub() {};
+        noop.prototype = {};
+        stubCache.set(property, noop);
+      }
+      return stubCache.get(property);
+    },
+  });
+
+  const Module = require('module');
+  const originalLoad = Module._load;
+  Module._load = function loadWithCryptoFallback(request, parent, isMain) {
+    if (request === '@matrix-org/matrix-sdk-crypto-nodejs') {
+      return stub;
+    }
+    return originalLoad.call(this, request, parent, isMain);
+  };
+
+  console.warn('[matrix] native E2EE crypto module unavailable — running without encryption support.');
+}
+
+installMatrixCryptoFallback();
+
 const {
   MatrixClient,
   MatrixAuth,

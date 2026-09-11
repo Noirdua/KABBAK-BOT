@@ -8,14 +8,22 @@ async function main() {
   const starters = [];
 
   if (process.env.DISCORD_TOKEN) {
-    starters.push(require('./platforms/discord').start());
+    try {
+      starters.push(require('./platforms/discord').start());
+    } catch (error) {
+      console.error('Discord failed to start:', error?.message || error);
+    }
   }
 
   // if (process.env.TELEGRAM_BOT_TOKEN) starters.push(require('./platforms/telegram').start());
 
-  const matrix = require('./platforms/matrix');
-  if (matrix.configured()) {
-    starters.push(matrix.start());
+  try {
+    const matrix = require('./platforms/matrix');
+    if (matrix.configured()) {
+      starters.push(matrix.start());
+    }
+  } catch (error) {
+    console.error('Matrix failed to start:', error?.message || error);
   }
 
   if (!starters.length) {
@@ -24,7 +32,12 @@ async function main() {
   }
 
   console.log(`KABBAK bot starting. API target: ${API_BASE}`);
-  await Promise.all(starters);
+  const results = await Promise.allSettled(starters);
+  for (const result of results) {
+    if (result.status === 'rejected') {
+      console.error('A chat platform stopped:', result.reason?.message || result.reason);
+    }
+  }
 }
 
 main().catch((error) => {
