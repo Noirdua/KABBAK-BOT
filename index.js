@@ -32,7 +32,12 @@ async function main() {
       console.error('Discord failed to start:', error?.message || error);
     }
   } else {
-    console.warn('[config] DISCORD_TOKEN is empty in this .env — Discord will not start. Add your bot token after DISCORD_TOKEN=.');
+    const discordClientId = readEnv('DISCORD_CLIENT_ID');
+    if (discordClientId) {
+      console.warn('[config] DISCORD_CLIENT_ID is set but DISCORD_TOKEN is missing. The client/application ID is NOT the bot token — copy the bot token from the Discord Developer Portal (your app → Bot → Reset Token) and add DISCORD_TOKEN=<token> to .env.');
+    } else {
+      console.warn('[config] DISCORD_TOKEN is empty in this .env — Discord will not start. Add your bot token after DISCORD_TOKEN=.');
+    }
   }
 
   // if (process.env.TELEGRAM_BOT_TOKEN) starters.push(require('./platforms/telegram').start());
