@@ -135,7 +135,7 @@ async function handleAutocomplete(interaction) {
         section: optionValue(interaction, 'section'),
         country: optionValue(interaction, 'country'),
         region: optionValue(interaction, 'region'),
-    });
+    }, { autocomplete: true });
     await interaction.respond(choices);
   } catch (error) {
     console.error('[discord] autocomplete failed:', error?.message || error);
