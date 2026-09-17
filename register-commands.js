@@ -43,6 +43,21 @@ const commands = [
       },
       {
         type: 1,
+        name: 'natal',
+        description: 'Natal chart (sun, moon, rising, planets, aspects)',
+        options: [
+          { name: 'date', type: 3, description: 'Birth date (YYYY-MM-DD)', required: true },
+          { name: 'time', type: 3, description: 'Birth time (HH:MM, local mean time at the place)', required: false },
+          { name: 'location', type: 3, description: 'Birth place (type a city, e.g. Los Angeles)', required: false, autocomplete: true },
+          { name: 'country', type: 3, description: 'Country (type to search)', required: false, autocomplete: true },
+          { name: 'region', type: 3, description: 'State/region (type to search)', required: false, autocomplete: true },
+          { name: 'city', type: 3, description: 'City (type to search)', required: false, autocomplete: true },
+          { name: 'latitude', type: 10, description: 'Latitude (decimal degrees)', required: false },
+          { name: 'longitude', type: 10, description: 'Longitude (decimal degrees)', required: false },
+        ],
+      },
+      {
+        type: 1,
         name: 'calendar',
         description: 'Upcoming week events (moon phases, planetary hours)',
         options: [
