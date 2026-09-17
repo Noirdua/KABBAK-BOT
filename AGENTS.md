@@ -13,7 +13,9 @@ The API is a sibling checkout: `../KABBAK-API` (defaults to `http://localhost:31
 | `lib/kabbak-api.js` | HTTP client (`apiGet`/`apiPatch`), auth headers, asset URLs, error messages |
 | `lib/catalog.js` | Autocomplete values + in-memory caches for API catalogs |
 | `lib/commands.js` | Command core (all behavior lives here) |
-| `lib/spread-stitch.js` | Tarot spread image compositing (jimp + sharp) |
+| `lib/spread-stitch.js` | Tarot spread print compositing (SVG chrome + sharp) |
+| `lib/spread-print.js` | Built-in atelier layout + SVG/JSON template rasterize |
+| `lib/spread-templates.js` | Load shareable print templates from `templates/` and `storage/templates/` |
 | `lib/tattva-image.js` | Tattva image rendering |
 | `lib/text-command.js` | Text/library command helpers |
 | `lib/user-store.js` | Per chat-user saved API keys (encrypted on disk) |
@@ -57,6 +59,7 @@ node --check <file>  # syntax check (no test suite)
 ## Conventions
 
 - Keep secrets out of git: `.env` stays local (`.env.example` only has placeholders).
-- `jimp` is pinned to `0.22.12` (see `spread-stitch.js` `assertJimp`); do not upgrade to 1.x.
+- `jimp` is pinned to `0.22.12` (see `tattva-image.js`); do not upgrade to 1.x.
+- Spread prints are SVG (or JSON slots) rasterized with `sharp`. HTML templates are not used — SVG is the shareable print format (Inkscape/Figma). Placeholders: `<image data-kabbak="card" data-index="1" data-pos="past"/>` plus optional `data-kabbak` text (`title`, `description`, `footer`, `label`, `name`, `meaning`). Drop files in `templates/` or `storage/templates/`. Built-in layout id: `atelier`.
 - Matrix E2EE needs native crypto; without it set `KABBAK_MATRIX_STUB_CRYPTO=1`.
 - Prefer short, user-safe error strings (see `friendlyApiError`) over raw API messages.

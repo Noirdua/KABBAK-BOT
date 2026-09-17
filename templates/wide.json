@@ -1,0 +1,22 @@
+{
+  "id": "wide",
+  "name": "Wide legend",
+  "width": 1680,
+  "height": 920,
+  "meaningMode": "legend",
+  "theme": {
+    "bg": "#120818",
+    "panel": "#1c1026",
+    "ink": "#f4ead4",
+    "muted": "#c0ad93",
+    "gold": "#e0c078",
+    "goldDim": "#9a7840",
+    "frame": "#23182e",
+    "rule": "#6b4e71"
+  },
+  "slots": [
+    { "pos": "past", "index": 1, "x": 72, "y": 148, "width": 220, "height": 374 },
+    { "pos": "present", "index": 2, "x": 348, "y": 148, "width": 220, "height": 374 },
+    { "pos": "future", "index": 3, "x": 624, "y": 148, "width": 220, "height": 374 }
+  ]
+}

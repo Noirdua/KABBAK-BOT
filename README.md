@@ -19,10 +19,13 @@ Each chat-account can save their own KABBAK API key. After that, every command r
 Without a saved key, commands use the shared bot key from `.env`.
 
 ### Tarot
-- `/kabbak tarot draw [spread:three-card] [deck]` — one image with cards and meanings (default upright). `reversed:true` to allow reversed cards. `stitch:false` or `separate` for one message per card
+- `/kabbak tarot draw [spread:three-card] [deck]` — one print image with cards and meanings (default upright). `reversed:true` to allow reversed cards. `stitch:false` or `separate` for one message per card. `template:atelier` (default), `template:three-card`, or `template:wide`
 - `/kabbak tarot card name:The Empress [deck]` — look up one card (meanings, dates, one image)
 - `/kabbak tarot cards [query:fool] [deck]` — list/search the card library
 - `/kabbak tarot spreads` — list available spreads
+- `/kabbak tarot templates` — list print templates
+
+Print templates are SVG (best for card prints; design in Inkscape or Figma) or JSON slot layouts. Ship extras in `templates/`, or drop local files in `storage/templates/`. Card placeholders are `<image data-kabbak="card" data-index="1" data-pos="past"/>`; fillable text uses `data-kabbak="title|description|footer|label|name|meaning"`. Meaning slots may set `data-width` for wrapping. JSON files can set `theme`, `slots` (`x`,`y`,`width`,`height`,`pos`), and `meaningMode` (`under` or `legend`).
 
 ### Time & location
 - `/kabbak now [country] [region] [city]` — current astrological snapshot (lat/lon still work)

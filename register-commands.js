@@ -224,6 +224,13 @@ const commands = [
                 description: 'Allow reversed cards (default off)',
                 required: false,
               },
+              {
+                name: 'template',
+                type: 3,
+                description: 'Print template (atelier, or a shared .svg/.json)',
+                required: false,
+                autocomplete: true,
+              },
             ],
           },
           {
@@ -272,6 +279,11 @@ const commands = [
             type: 1,
             name: 'spreads',
             description: 'List available spreads',
+          },
+          {
+            type: 1,
+            name: 'templates',
+            description: 'List spread print templates',
           },
         ],
       },

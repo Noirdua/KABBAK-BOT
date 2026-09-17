@@ -44,6 +44,7 @@ function readArgs(options) {
     value: options?.getInteger?.('value'),
     category: options?.getString?.('category'),
     deck: options?.getString?.('deck'),
+    template: options?.getString?.('template'),
     stitch: options?.getBoolean?.('stitch'),
     reversed: options?.getBoolean?.('reversed'),
   };
