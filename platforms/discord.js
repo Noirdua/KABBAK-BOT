@@ -43,6 +43,7 @@ function readArgs(options) {
     tattva: options?.getString?.('tattva'),
     value: options?.getInteger?.('value'),
     category: options?.getString?.('category'),
+    count: options?.getInteger?.('count'),
     deck: options?.getString?.('deck'),
     template: options?.getString?.('template'),
     stitch: options?.getBoolean?.('stitch'),
@@ -222,26 +223,28 @@ async function handleChatCommand(interaction) {
       return;
     }
 
-    const components = result?.type === 'quiz' ? buttonRows(result.buttons) : [];
-    const files = asList(result)
-      .filter((item) => item?.attachment?.buffer)
-      .map((item) => new AttachmentBuilder(item.attachment.buffer, {
-        name: item.attachment.name || 'image.jpg',
-      }));
-    const embeds = toEmbeds(result);
-    if (!embeds.length && files.length) {
-      await interaction.editReply({ files, components: [] }).catch((error) => {
-        if (error?.code !== 10062) console.error('[discord] editReply failed:', error?.message || error);
-      });
+    const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
+    if (!items.length) {
+      await interaction.editReply({ content: 'No result.' }).catch(() => {});
       return;
     }
-    await interaction.editReply({
-      embeds,
-      components,
-      files,
-    }).catch((error) => {
-      if (error?.code !== 10062) console.error('[discord] editReply failed:', error?.message || error);
-    });
+    for (let i = 0; i < items.length; i += 1) {
+      const item = items[i];
+      const files = item?.attachment?.buffer
+        ? [new AttachmentBuilder(item.attachment.buffer, { name: item.attachment.name || 'image.jpg' })]
+        : [];
+      const embeds = toEmbeds(item);
+      const components = item.type === 'quiz' ? buttonRows(item.buttons) : [];
+      const payload = !embeds.length && files.length
+        ? { files, components: [] }
+        : { embeds, components, files };
+      const send = i === 0
+        ? interaction.editReply(payload)
+        : interaction.followUp(payload);
+      await send.catch((error) => {
+        if (error?.code !== 10062) console.error('[discord] reply failed:', error?.message || error);
+      });
+    }
   } catch (err) {
     console.error(err);
     await interaction.editReply({ content: `Error: ${err.message}` }).catch(() => {});

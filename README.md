@@ -38,7 +38,7 @@ Print templates are SVG (best for card prints; design in Inkscape or Figma) or J
 - `/kabbak iching [number:24]` — I-Ching hexagram (random when omitted)
 - `/kabbak tattva [tattva:akasha]` — Golden Dawn tattva (lists the five primaries when omitted)
 - `/kabbak gematria value:111` — reverse gematria lookup
-- `/kabbak quiz [category]` — quiz question with tappable answers
+- `/kabbak quiz [category] [count:5]` — quiz round (1–5 questions, each in its own message with tappable answers; default 5)
 - `/kabbak search query:rose cross [source] [work]` — full-verse text search; optional source/work autocomplete to narrow the library
 - `/kabbak text sources` — list the library's books
 - `/kabbak text section source:… work:… section:… [verse:3-6]` — read verses (max 3; omit verse for a random one). Source/work/section/verse autocomplete; type to search past the first 25 Discord shows.

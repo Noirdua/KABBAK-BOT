@@ -108,7 +108,7 @@ const commands = [
       {
         type: 1,
         name: 'quiz',
-        description: 'Pull a quiz question with clickable answers',
+        description: 'Pull a quiz round with clickable answers',
         options: [
           {
             name: 'category',
@@ -116,6 +116,14 @@ const commands = [
             description: 'Category (type to search the full list)',
             required: false,
             autocomplete: true,
+          },
+          {
+            name: 'count',
+            type: 4,
+            description: 'How many questions (1–5, default 5)',
+            required: false,
+            min_value: 1,
+            max_value: 5,
           },
         ],
       },
