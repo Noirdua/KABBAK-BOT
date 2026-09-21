@@ -52,7 +52,7 @@ Print templates are SVG (best for card prints; design in Inkscape or Figma) or J
 1. Explicit `latitude`/`longitude` options, otherwise
 2. this chat account's saved location, otherwise
 3. the KABBAK profile location (only if they logged in with their own API key), otherwise
-4. the built-in default (Sydney).
+4. an unlabeled server fallback (never shown as your location).
 
 ## Setup
 

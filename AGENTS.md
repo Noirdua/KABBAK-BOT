@@ -43,6 +43,12 @@ Endpoints used (keep names/shapes; see `../KABBAK-API/AGENTS.md` for the source 
 
 **Deck systems:** `GET /decks/options` items carry `system` (`tarot`, `iching`, `playing-cards`, …). Tarot-only features (spreads, tarot card image lookups) must filter out non-`tarot` decks so a hexagram or playing-card deck never resolves a tarot card.
 
+**Location privacy (do not regress):** location and email are private user data. Command replies land in shared channels, so:
+- Never print the coordinates of a location the user *saved* (chat store or `GET /profile`) — `describeLocation` shows only their own label for those.
+- The unlabeled server fallback is for the maths only: never echo it, and never imply it is the user's location.
+- Only a location the user typed in the current command (`latitude`/`longitude`, or a resolved place) is shown in full, because they just chose to share it there.
+- The bot never receives or prints account email; `GET /profile` may carry it for the owner, so do not surface it in replies.
+
 ## Sync rule
 
 The API and bot are separate repos that ship together. **When a change in `../KABBAK-API` alters a route, response shape, auth behavior, or domain feature listed above, update this bot in the same change** and note it in the commit. Keep the contract stable or bump both.
