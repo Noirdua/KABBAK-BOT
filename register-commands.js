@@ -99,6 +99,15 @@ const commands = [
       },
       {
         type: 1,
+        name: 'relations',
+        description: 'Show how a correspondence connects to the rest of the tree',
+        options: [
+          { name: 'kind', type: 3, description: 'Entity kind, e.g. sephirah, planet, sign, kabbalah-path', required: true },
+          { name: 'id', type: 3, description: 'Entity id or name, e.g. keter or aries', required: true },
+        ],
+      },
+      {
+        type: 1,
         name: 'gematria',
         description: 'Reverse gematria: find words carrying a numeric value',
         options: [

@@ -42,6 +42,8 @@ function readArgs(options) {
     number: options?.getInteger?.('number'),
     tattva: options?.getString?.('tattva'),
     value: options?.getInteger?.('value'),
+    kind: options?.getString?.('kind'),
+    id: options?.getString?.('id'),
     category: options?.getString?.('category'),
     count: options?.getInteger?.('count'),
     deck: options?.getString?.('deck'),

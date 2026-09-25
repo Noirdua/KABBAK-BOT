@@ -38,7 +38,7 @@ Endpoints used (keep names/shapes; see `../KABBAK-API/AGENTS.md` for the source 
 - `GET /decks/options` → `{ decks: [{ id, name, label, system }] }`; `GET /decks`
 - `GET /iching` → `{ hexagrams: [{ number, name }] }`, `GET /iching/hexagrams/:number`
 - `GET /texts` → `{ sources: [...] }`, `GET /texts/search`, `GET /texts/:sourceId/works/:workId/sections/:sectionId`
-- `GET /tattvas`, `GET /tattvas/:id`, `GET /gematria/words`, `GET /locations/*`, `GET /quiz/*`
+- `GET /tattvas`, `GET /tattvas/:id`, `GET /gematria/words`, `GET /correspondences/:kind/:id`, `GET /locations/*`, `GET /quiz/*`
 - `GET /assets/<path>` — media tags may pass `?apiKey=` (headers elsewhere)
 
 **Deck systems:** `GET /decks/options` items carry `system` (`tarot`, `iching`, `playing-cards`, …). Tarot-only features (spreads, tarot card image lookups) must filter out non-`tarot` decks so a hexagram or playing-card deck never resolves a tarot card.
