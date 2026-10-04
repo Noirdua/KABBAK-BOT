@@ -235,7 +235,7 @@ const commands = [
       {
         type: 1,
         name: 'tarot',
-        description: 'Tarot menu: draw, look up a card, search, spreads, and templates',
+        description: 'Tarot menu: draw, look up a card, search, and templates',
       },
       {
         type: 2,

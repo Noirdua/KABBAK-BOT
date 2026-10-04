@@ -64,7 +64,8 @@ function selectRow(customId, placeholder, choices) {
 
 async function tarotDrawRows(draft) {
   const spreads = await getSpreadOptions().catch(() => []);
-  const decks = await getDeckOptions().catch(() => []);
+  const decks = (await getDeckOptions().catch(() => []))
+    .filter((deck) => String(deck?.system || 'tarot').trim().toLowerCase() === 'tarot');
   const templates = require('../lib/spread-templates').listTemplates();
   const toggles = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId('tarot:toggle:stitch').setLabel(draft.stitch ? 'Stitch: on' : 'Stitch: off').setStyle(ButtonStyle.Secondary),
@@ -255,7 +256,11 @@ async function handleTarotButton(interaction) {
   }
   if (customId === 'tarot:run:draw') {
     const savedPrivate = require('../lib/user-store').getReplyVisibility(userId) === 'private';
-    await interaction.deferReply({ ephemeral: draft.private || savedPrivate });
+    const ephemeral = draft.private || savedPrivate;
+    await interaction.update({
+      embeds: toEmbeds({ title: 'Draw', description: ephemeral ? 'Sent privately.' : 'Drawing…' }),
+      components: [],
+    }).catch(() => {});
     const result = await dispatch({
       userId,
       group: 'tarot',
@@ -266,11 +271,11 @@ async function handleTarotButton(interaction) {
         template: draft.template && draft.template !== '-' ? draft.template : '',
         stitch: draft.stitch,
         reversed: draft.reversed,
-        visibility: draft.private ? 'private' : 'public',
+        visibility: ephemeral ? 'private' : 'public',
       },
       prefix: PREFIX,
     });
-    await sendDispatchResult(interaction, result);
+    await followDispatchResult(interaction, result, { ephemeral });
     return;
   }
   const subcommand = customId.split(':')[2];
@@ -316,6 +321,25 @@ async function handleTarotModal(interaction) {
       prefix: PREFIX,
     });
   await sendDispatchResult(interaction, result);
+}
+
+async function followDispatchResult(interaction, result, { ephemeral = false } = {}) {
+  const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
+  if (!items.length) {
+    await interaction.followUp({ content: 'No result.', ephemeral }).catch(() => {});
+    return;
+  }
+  for (const item of items) {
+    const files = item?.attachment?.buffer
+      ? [new AttachmentBuilder(item.attachment.buffer, { name: item.attachment.name || 'image.jpg' })]
+      : [];
+    const embeds = toEmbeds(item);
+    const payload = !embeds.length && files.length
+      ? { files, components: [] }
+      : { embeds, components: [], files };
+    if (ephemeral) payload.ephemeral = true;
+    await interaction.followUp(payload).catch(() => {});
+  }
 }
 
 async function sendDispatchResult(interaction, result) {
