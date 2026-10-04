@@ -348,7 +348,7 @@ async function handleTextButton(interaction) {
       });
     await editDispatchResult(interaction, result);
     if (!savedPrivate && interaction.message) {
-      await interaction.message.edit({ content: 'Posted in the channel.', embeds: [], components: [] }).catch(() => {});
+      await interaction.message.delete().catch(() => {});
     }
     return;
   }
@@ -449,7 +449,7 @@ async function handleTarotButton(interaction) {
     });
     await editDispatchResult(interaction, result);
     if (!ephemeral && interaction.message) {
-      await interaction.message.edit({ content: 'Posted in the channel.', embeds: [], components: [] }).catch(() => {});
+      await interaction.message.delete().catch(() => {});
     }
     return;
   }
@@ -555,7 +555,7 @@ async function deliverResult(interaction, result, { ephemeral = false } = {}) {
   }
   const posted = await postPublic(interaction, items);
   if (posted) {
-    await interaction.editReply({ content: 'Posted in the channel.', embeds: [], components: [] }).catch(() => {});
+    await interaction.deleteReply().catch(() => {});
     return;
   }
   await showPrivate(interaction, items);
