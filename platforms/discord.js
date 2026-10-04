@@ -323,8 +323,9 @@ async function handleTextButton(interaction) {
     return;
   }
   if (customId === 'text:run:search' || customId === 'text:run:section') {
-    await interaction.deferUpdate();
     const savedPrivate = require('../lib/user-store').getReplyVisibility(userId) === 'private';
+    if (savedPrivate) await interaction.deferUpdate();
+    else await interaction.deferReply({ ephemeral: false });
     const result = customId === 'text:run:search'
       ? await dispatch({
         userId,
@@ -345,16 +346,9 @@ async function handleTextButton(interaction) {
         },
         prefix: PREFIX,
       });
-    if (savedPrivate || shouldStayPrivate(result)) {
-      await editDispatchResult(interaction, result);
-      return;
-    }
-    await interaction.editReply({ content: 'Posted in the channel.', embeds: [], components: [] }).catch(() => {});
-    if (interaction.channel) {
-      const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
-      for (const item of items) {
-        await interaction.channel.send(dispatchPayload(item)).catch(() => {});
-      }
+    await editDispatchResult(interaction, result);
+    if (!savedPrivate && interaction.message) {
+      await interaction.message.edit({ content: 'Posted in the channel.', embeds: [], components: [] }).catch(() => {});
     }
     return;
   }
@@ -417,6 +411,7 @@ async function handleTarotButton(interaction) {
     return;
   }
   if (customId === 'tarot:menu:draw') {
+    draft.private = require('../lib/user-store').getReplyVisibility(userId) === 'private';
     const rows = await tarotDrawRows(draft);
     await interaction.update({
       embeds: toEmbeds({ title: 'Draw', description: 'Set the options, then press Draw.' }),
@@ -433,7 +428,11 @@ async function handleTarotButton(interaction) {
   if (customId === 'tarot:run:draw') {
     const savedPrivate = require('../lib/user-store').getReplyVisibility(userId) === 'private';
     const ephemeral = draft.private || savedPrivate;
-    await interaction.deferUpdate();
+    if (!ephemeral) {
+      await interaction.deferReply({ ephemeral: false });
+    } else {
+      await interaction.deferUpdate();
+    }
     const result = await dispatch({
       userId,
       group: 'tarot',
@@ -448,17 +447,10 @@ async function handleTarotButton(interaction) {
       },
       prefix: PREFIX,
     });
-    const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
-    if (ephemeral || !items.length) {
-      await editDispatchResult(interaction, result);
-      return;
+    await editDispatchResult(interaction, result);
+    if (!ephemeral && interaction.message) {
+      await interaction.message.edit({ content: 'Posted in the channel.', embeds: [], components: [] }).catch(() => {});
     }
-    const posted = await postPublic(interaction, items);
-    if (!posted) {
-      await editDispatchResult(interaction, result);
-      return;
-    }
-    await interaction.editReply({ content: 'Posted in the channel.', embeds: [], components: [] }).catch(() => {});
     return;
   }
   const subcommand = customId.split(':')[2];
