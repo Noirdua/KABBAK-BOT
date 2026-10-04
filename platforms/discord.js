@@ -324,8 +324,7 @@ async function handleTextButton(interaction) {
   }
   if (customId === 'text:run:search' || customId === 'text:run:section') {
     const savedPrivate = require('../lib/user-store').getReplyVisibility(userId) === 'private';
-    if (savedPrivate) await interaction.deferUpdate();
-    else await interaction.deferReply({ ephemeral: false });
+    await interaction.deferUpdate();
     const result = customId === 'text:run:search'
       ? await dispatch({
         userId,
@@ -346,10 +345,17 @@ async function handleTextButton(interaction) {
         },
         prefix: PREFIX,
       });
-    await editDispatchResult(interaction, result);
-    if (!savedPrivate && interaction.message) {
-      await interaction.message.delete().catch(() => {});
+    if (savedPrivate) {
+      await editDispatchResult(interaction, result);
+      return;
     }
+    const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
+    const posted = await postPublic(interaction, items);
+    if (!posted) {
+      await editDispatchResult(interaction, result);
+      return;
+    }
+    await dismissEphemeral(interaction);
     return;
   }
   const privateReply = require('../lib/user-store').getReplyVisibility(userId) === 'private';
@@ -428,11 +434,7 @@ async function handleTarotButton(interaction) {
   if (customId === 'tarot:run:draw') {
     const savedPrivate = require('../lib/user-store').getReplyVisibility(userId) === 'private';
     const ephemeral = draft.private || savedPrivate;
-    if (!ephemeral) {
-      await interaction.deferReply({ ephemeral: false });
-    } else {
-      await interaction.deferUpdate();
-    }
+    await interaction.deferUpdate();
     const result = await dispatch({
       userId,
       group: 'tarot',
@@ -447,10 +449,17 @@ async function handleTarotButton(interaction) {
       },
       prefix: PREFIX,
     });
-    await editDispatchResult(interaction, result);
-    if (!ephemeral && interaction.message) {
-      await interaction.message.delete().catch(() => {});
+    if (ephemeral) {
+      await editDispatchResult(interaction, result);
+      return;
     }
+    const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
+    const posted = await postPublic(interaction, items);
+    if (!posted) {
+      await editDispatchResult(interaction, result);
+      return;
+    }
+    await dismissEphemeral(interaction);
     return;
   }
   const subcommand = customId.split(':')[2];
@@ -511,6 +520,16 @@ function shouldStayPrivate(result) {
   });
 }
 
+async function dismissEphemeral(interaction) {
+  const messageId = interaction.message?.id;
+  await interaction.deleteReply().catch((error) => {
+    console.error('[discord] delete original failed:', error?.message || error);
+  });
+  if (messageId) {
+    await interaction.webhook.deleteMessage(messageId).catch(() => {});
+  }
+}
+
 async function publicChannel(interaction) {
   if (interaction.channel && typeof interaction.channel.send === 'function') return interaction.channel;
   if (!interaction.channelId) return null;
@@ -555,7 +574,7 @@ async function deliverResult(interaction, result, { ephemeral = false } = {}) {
   }
   const posted = await postPublic(interaction, items);
   if (posted) {
-    await interaction.deleteReply().catch(() => {});
+    await dismissEphemeral(interaction);
     return;
   }
   await showPrivate(interaction, items);
