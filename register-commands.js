@@ -20,7 +20,7 @@ function addVisibilityOption(option) {
   if (Array.isArray(option.options)) {
     option.options = option.options.map(addVisibilityOption);
   }
-  if (option.type === 1 && !['reply', 'login', 'config', 'tarot', 'text', 'iching'].includes(option.name)) {
+  if (option.type === 1 && !['reply', 'login', 'config', 'tarot', 'text', 'iching', 'quiz'].includes(option.name)) {
     const options = Array.isArray(option.options) ? option.options : [];
     if (!options.some((entry) => entry.name === 'visibility')) {
       option.options = [...options, VISIBILITY_OPTION];
@@ -74,24 +74,7 @@ const commands = [
       {
         type: 1,
         name: 'quiz',
-        description: 'Pull a quiz round with clickable answers',
-        options: [
-          {
-            name: 'category',
-            type: 3,
-            description: 'Category (type to search the full list)',
-            required: false,
-            autocomplete: true,
-          },
-          {
-            name: 'count',
-            type: 4,
-            description: 'How many questions (1–5, default 5)',
-            required: false,
-            min_value: 1,
-            max_value: 5,
-          },
-        ],
+        description: 'Quiz menu: pick a category, 4 or 5 questions, then answer from dropdowns',
       },
       {
         type: 1,

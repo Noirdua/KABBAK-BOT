@@ -14,12 +14,13 @@ const {
 } = require('discord.js');
 const { accountId } = require('../lib/user-store');
 const { asList, truncate } = require('../lib/cards');
-const { suggest, getSpreadOptions, getDeckOptions, getTextCatalog, getSectionVerses, verseNumber } = require('../lib/catalog');
-const { dispatch, completeApiLogin, answerQuiz } = require('../lib/commands');
+const { suggest, getSpreadOptions, getDeckOptions, getTextCatalog, getSectionVerses, verseNumber, getQuizCategories } = require('../lib/catalog');
+const { dispatch, completeApiLogin, answerQuiz, createQuizRound, recordQuizAnswer, gradeQuizRound } = require('../lib/commands');
 
 const PREFIX = '/kabbak';
 const tarotDrafts = new Map();
 const ichingDrafts = new Map();
+const quizSetups = new Map();
 const textDrafts = new Map();
 
 function textDraft(userId) {
@@ -735,6 +736,129 @@ async function handleConfigButton(interaction) {
   }).catch(() => {});
 }
 
+function quizSetup(userId) {
+  if (!quizSetups.has(userId)) quizSetups.set(userId, { category: '', count: 4 });
+  return quizSetups.get(userId);
+}
+
+async function quizMenuRows(setup) {
+  const categories = await getQuizCategories().catch(() => []);
+  const items = categories.map((entry) => (
+    typeof entry === 'string' ? { id: entry, label: entry } : { id: entry.id || entry.name, label: entry.name || entry.title || entry.id }
+  )).filter((entry) => entry.id);
+  return [
+    selectRow('quizset:category', 'Category', selectChoices(items, setup.category, (item) => item.label, (item) => item.id)),
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('quiz:count:4').setLabel(setup.count === 4 ? '4 questions ✓' : '4 questions').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('quiz:count:5').setLabel(setup.count === 5 ? '5 questions ✓' : '5 questions').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('quiz:start').setLabel('Start').setStyle(ButtonStyle.Primary)
+    ),
+  ];
+}
+
+function quizQuestionRows(quizId, questions) {
+  return questions.slice(0, 5).map((question, index) => {
+    const options = question.options.slice(0, 25).map((label, optionIndex) => new StringSelectMenuOptionBuilder()
+      .setLabel(truncate(String(label || `Option ${optionIndex + 1}`), 100))
+      .setValue(String(optionIndex))
+      .setDefault(question.chosenIndex === optionIndex));
+    return new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId(`quizpick:${quizId}:${index}`)
+        .setPlaceholder(truncate(`Q${index + 1}. ${question.prompt}`, 150))
+        .setMinValues(1)
+        .setMaxValues(1)
+        .addOptions(options.length ? options : [new StringSelectMenuOptionBuilder().setLabel('No answers').setValue('0')])
+    );
+  });
+}
+
+async function handleQuizMenuButton(interaction) {
+  if (await rejectStranger(interaction)) return;
+  const customId = String(interaction.customId || '');
+  if (customId.startsWith('quizgrade:')) {
+    const result = gradeQuizRound(customId.split(':')[1], `${interaction.user}`, { prefix: PREFIX });
+    const savedPrivate = require('../lib/user-store').getReplyVisibility(userIdFrom(interaction)) === 'private';
+    if (savedPrivate || interaction.ephemeral) {
+      await interaction.update({ embeds: toEmbeds(result), components: [] }).catch(() => {});
+      return;
+    }
+    await interaction.update({ content: 'Quiz posted in the channel.', embeds: [], components: [] }).catch(() => {});
+    const channel = await publicChannel(interaction);
+    if (channel) await channel.send({ embeds: toEmbeds(result) }).catch(() => {});
+    return;
+  }
+  if (/^quiz:[a-f0-9]+:\d+$/.test(customId)) {
+    await handleQuizButton(interaction);
+    return;
+  }
+  const userId = userIdFrom(interaction);
+  const setup = quizSetup(userId);
+  if (customId === 'quiz:count:4' || customId === 'quiz:count:5') {
+    setup.count = customId.endsWith('5') ? 5 : 4;
+    await interaction.update({ components: await quizMenuRows(setup) }).catch(() => {});
+    return;
+  }
+  if (customId !== 'quiz:start') return;
+  await interaction.deferUpdate();
+  const round = await createQuizRound({ userId, apiKey: require('../lib/user-store').getApiKey(userId) }, setup.category, setup.count);
+  if (!round) {
+    await interaction.editReply({ content: 'No questions available.', embeds: [], components: [] }).catch(() => {});
+    return;
+  }
+  const savedPrivate = require('../lib/user-store').getReplyVisibility(userId) === 'private';
+  const description = round.questions.map((question, index) => `**${index + 1}.** ${question.prompt}`).join('\n\n');
+  const payload = {
+    embeds: toEmbeds({ title: `Quiz · ${setup.count} questions`, description }),
+    components: quizQuestionRows(round.quizId, round.questions),
+  };
+  if (savedPrivate || interaction.ephemeral) {
+    await interaction.editReply(payload).catch(() => {});
+    return;
+  }
+  await interaction.editReply({ content: 'Quiz posted in the channel.', embeds: [], components: [] }).catch(() => {});
+  const channel = await publicChannel(interaction);
+  if (channel) await channel.send(payload).catch(() => interaction.editReply(payload));
+}
+
+async function handleQuizSelect(interaction) {
+  if (await rejectStranger(interaction)) return;
+  const customId = String(interaction.customId || '');
+  if (customId === 'quizset:category') {
+    const setup = quizSetup(userIdFrom(interaction));
+    setup.category = interaction.values?.[0] === '-' ? '' : (interaction.values?.[0] || '');
+    await interaction.update({ components: await quizMenuRows(setup) }).catch(() => {});
+    return;
+  }
+  const match = /^quizpick:([a-f0-9]+):(\d+)$/.exec(customId);
+  if (!match) return;
+  const entry = recordQuizAnswer(match[1], Number(match[2]), Number(interaction.values?.[0]));
+  if (!entry) {
+    await interaction.reply({ content: 'This quiz expired.', ephemeral: true }).catch(() => {});
+    return;
+  }
+  const allAnswered = entry.questions.every((question) => question.chosenIndex != null);
+  if (!allAnswered || entry.questions.length < 5) {
+    const rows = quizQuestionRows(match[1], entry.questions);
+    if (entry.questions.length < 5) {
+      rows.push(new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId(`quizgrade:${match[1]}`).setLabel('Grade').setStyle(ButtonStyle.Primary)
+      ));
+    }
+    await interaction.update({ components: rows }).catch(() => {});
+    if (!(allAnswered && entry.questions.length === 5)) return;
+  }
+  const result = gradeQuizRound(match[1], `${interaction.user}`, { prefix: PREFIX });
+  const savedPrivate = require('../lib/user-store').getReplyVisibility(userIdFrom(interaction)) === 'private';
+  if (savedPrivate || interaction.ephemeral) {
+    await interaction.update({ embeds: toEmbeds(result), components: [] }).catch(() => {});
+    return;
+  }
+  await interaction.update({ content: 'Quiz posted in the channel.', embeds: [], components: [] }).catch(() => {});
+  const channel = await publicChannel(interaction);
+  if (channel) await channel.send({ embeds: toEmbeds(result) }).catch(() => {});
+}
+
 async function handleQuizButton(interaction) {
   const customId = String(interaction.customId || '');
   const match = /^quiz:([a-f0-9]+):(\d+)$/.exec(customId);
@@ -810,6 +934,14 @@ async function handleChatCommand(interaction) {
       })
       : { title: 'KABBAK', description: `Commands now live under ${PREFIX} — try ${PREFIX} help.` };
 
+    if (commandName === 'kabbak' && subcommand === 'quiz' && !group) {
+      await interaction.editReply({
+        embeds: toEmbeds({ title: 'Quiz', description: 'Pick a category and 4 or 5 questions, then Start. Each question is a dropdown.' }),
+        components: await quizMenuRows(quizSetup(userIdFrom(interaction))),
+      }).catch(() => {});
+      return;
+    }
+
     if (result?.type === 'collect-secret') {
       await interaction.editReply({ content: result.description || 'Send your API key privately.' }).catch(() => {});
       return;
@@ -857,6 +989,10 @@ async function start() {
         await handleIChingButton(interaction);
         return;
       }
+      if (customId.startsWith('quizgrade:') || customId.startsWith('quiz:')) {
+        await handleQuizMenuButton(interaction);
+        return;
+      }
       if (customId.startsWith('text:')) {
         await handleTextButton(interaction);
         return;
@@ -870,6 +1006,10 @@ async function start() {
     }
     if (interaction.isStringSelectMenu() && String(interaction.customId || '').startsWith('iching:set:')) {
       await handleIChingSelect(interaction);
+      return;
+    }
+    if (interaction.isStringSelectMenu() && String(interaction.customId || '').startsWith('quiz')) {
+      await handleQuizSelect(interaction);
       return;
     }
     if (interaction.isStringSelectMenu() && String(interaction.customId || '').startsWith('text:set:')) {
