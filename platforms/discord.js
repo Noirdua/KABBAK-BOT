@@ -48,6 +48,7 @@ function readArgs(options) {
     count: options?.getInteger?.('count'),
     deck: options?.getString?.('deck'),
     mode: options?.getString?.('mode'),
+    visibility: options?.getString?.('visibility'),
     template: options?.getString?.('template'),
     stitch: options?.getBoolean?.('stitch'),
     reversed: options?.getBoolean?.('reversed'),
@@ -89,6 +90,7 @@ function buttonRows(buttons) {
           .setCustomId(String(button.id || '').slice(0, 100))
           .setLabel(truncate(button.label || 'Option', 80))
           .setStyle(ButtonStyle.Primary)
+          .setDisabled(button.disabled === true)
       );
     });
     rows.push(row);
@@ -149,6 +151,33 @@ async function handleAutocomplete(interaction) {
   }
 }
 
+async function handleConfigButton(interaction) {
+  const [, section, action] = String(interaction.customId || '').split(':');
+  if (section === 'api' && action === 'login') {
+    try {
+      await showApiLoginModal(interaction);
+    } catch (error) {
+      if (error?.code !== 10062) console.error('[discord] config login failed:', error?.message || error);
+    }
+    return;
+  }
+  try {
+    await interaction.deferReply({ ephemeral: true });
+  } catch (error) {
+    if (error?.code === 10062) return;
+    return;
+  }
+  const userId = userIdFrom(interaction);
+  const result = section === 'reply'
+    ? await dispatch({ userId, subcommand: 'reply', args: { mode: action }, prefix: PREFIX })
+    : await dispatch({ userId, group: 'api', subcommand: action, args: {}, prefix: PREFIX });
+  const panel = await dispatch({ userId, subcommand: 'config', args: {}, prefix: PREFIX });
+  await interaction.editReply({
+    embeds: toEmbeds([result, panel].filter(Boolean)),
+    components: buttonRows(panel?.buttons),
+  }).catch(() => {});
+}
+
 async function handleQuizButton(interaction) {
   const customId = String(interaction.customId || '');
   const match = /^quiz:([a-f0-9]+):(\d+)$/.exec(customId);
@@ -198,11 +227,11 @@ async function handleChatCommand(interaction) {
     return;
   }
 
-  const replyMode = String(options?.getString?.('mode') || '').toLowerCase();
+  const replyMode = String(options?.getString?.('mode') || optionValue(interaction, 'visibility') || '').toLowerCase();
   const savedPrivate = require('../lib/user-store').getReplyVisibility(userIdFrom(interaction)) === 'private';
-  const ephemeral = (commandName === 'kabbak' && group === 'api')
-    || savedPrivate
-    || (commandName === 'kabbak' && subcommand === 'reply' && replyMode === 'private');
+  const ephemeral = (commandName === 'kabbak' && (group === 'api' || subcommand === 'config'))
+    || replyMode === 'private'
+    || (replyMode !== 'public' && savedPrivate);
   try {
     await interaction.deferReply({ ephemeral });
   } catch (error) {
@@ -241,7 +270,7 @@ async function handleChatCommand(interaction) {
         ? [new AttachmentBuilder(item.attachment.buffer, { name: item.attachment.name || 'image.jpg' })]
         : [];
       const embeds = toEmbeds(item);
-      const components = item.type === 'quiz' ? buttonRows(item.buttons) : [];
+      const components = item.buttons?.length ? buttonRows(item.buttons) : [];
       const payload = !embeds.length && files.length
         ? { files, components: [] }
         : { embeds, components, files };
@@ -280,6 +309,10 @@ async function start() {
       return;
     }
     if (interaction.isButton()) {
+      if (String(interaction.customId || '').startsWith('config:')) {
+        await handleConfigButton(interaction);
+        return;
+      }
       await handleQuizButton(interaction);
       return;
     }

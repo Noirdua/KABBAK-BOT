@@ -7,6 +7,28 @@ const { REST, Routes } = require('discord.js');
 //   /kabbak now latitude:... longitude:...
 // Discord option types: 1 = SUB_COMMAND, 2 = SUB_COMMAND_GROUP,
 // 3 = STRING, 4 = INTEGER, 10 = NUMBER.
+const VISIBILITY_OPTION = {
+  name: 'visibility',
+  type: 3,
+  description: 'This reply only: type private or public',
+  required: false,
+  autocomplete: true,
+};
+
+function addVisibilityOption(option) {
+  if (!option || typeof option !== 'object') return option;
+  if (Array.isArray(option.options)) {
+    option.options = option.options.map(addVisibilityOption);
+  }
+  if (option.type === 1 && option.name !== 'reply' && option.name !== 'login') {
+    const options = Array.isArray(option.options) ? option.options : [];
+    if (!options.some((entry) => entry.name === 'visibility')) {
+      option.options = [...options, VISIBILITY_OPTION];
+    }
+  }
+  return option;
+}
+
 const commands = [
   {
     name: 'kabbak',
@@ -19,20 +41,8 @@ const commands = [
       },
       {
         type: 1,
-        name: 'reply',
-        description: 'Choose whether your replies are public or only visible to you',
-        options: [
-          {
-            name: 'mode',
-            type: 3,
-            description: 'public (default) or private',
-            required: true,
-            choices: [
-              { name: 'public', value: 'public' },
-              { name: 'private', value: 'private' },
-            ],
-          },
-        ],
+        name: 'config',
+        description: 'Account settings: API key and whether replies are public or private',
       },
       {
         type: 1,
@@ -344,31 +354,10 @@ const commands = [
           { type: 1, name: 'clear', description: 'Remove your saved location' },
         ],
       },
-      {
-        type: 2,
-        name: 'api',
-        description: 'Log in with your own KABBAK API key',
-        options: [
-          {
-            type: 1,
-            name: 'login',
-            description: 'Save your API key (private form, never shown in chat)',
-          },
-          {
-            type: 1,
-            name: 'status',
-            description: 'Check whether you have a saved API key',
-          },
-          {
-            type: 1,
-            name: 'logout',
-            description: 'Remove your saved API key',
-          },
-        ],
-      },
+
     ],
   },
-];
+].map(addVisibilityOption);
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
