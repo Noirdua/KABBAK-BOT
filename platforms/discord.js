@@ -345,17 +345,23 @@ async function handleTextButton(interaction) {
         },
         prefix: PREFIX,
       });
-    if (savedPrivate && !interaction.ephemeral) {
-      await interaction.deleteReply().catch(() => {});
-      await followDispatchResult(interaction, result, { ephemeral: true });
+    if (savedPrivate || shouldStayPrivate(result)) {
+      await editDispatchResult(interaction, result);
       return;
     }
-    await editDispatchResult(interaction, result);
+    await interaction.editReply({ content: 'Posted in the channel.', embeds: [], components: [] }).catch(() => {});
+    if (interaction.channel) {
+      const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
+      for (const item of items) {
+        await interaction.channel.send(dispatchPayload(item)).catch(() => {});
+      }
+    }
     return;
   }
-  await interaction.deferReply({ ephemeral: require('../lib/user-store').getReplyVisibility(userId) === 'private' });
+  const privateReply = require('../lib/user-store').getReplyVisibility(userId) === 'private';
+  await interaction.deferReply({ ephemeral: true });
   const result = await dispatch({ userId, group: 'text', subcommand: 'sources', args: {}, prefix: PREFIX });
-  await sendDispatchResult(interaction, result);
+  await deliverResult(interaction, result, { ephemeral: privateReply });
 }
 
 async function handleTextSelect(interaction) {
@@ -442,19 +448,22 @@ async function handleTarotButton(interaction) {
       },
       prefix: PREFIX,
     });
-    if (ephemeral && !interaction.ephemeral) {
-      const removed = await interaction.deleteReply().then(() => true).catch(() => false);
-      if (!removed) {
-        await interaction.editReply({ content: 'Sent privately.', embeds: [], components: [], files: [] }).catch(() => {});
-      }
-      await followDispatchResult(interaction, result, { ephemeral: true });
+    if (ephemeral) {
+      await editDispatchResult(interaction, result);
       return;
     }
-    await editDispatchResult(interaction, result);
+    await interaction.editReply({ content: 'Posted in the channel.', embeds: [], components: [] }).catch(() => {});
+    if (interaction.channel) {
+      const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
+      for (const item of items) {
+        await interaction.channel.send(dispatchPayload(item)).catch(() => {});
+      }
+    }
     return;
   }
   const subcommand = customId.split(':')[2];
-  await interaction.deferReply({ ephemeral: require('../lib/user-store').getReplyVisibility(userId) === 'private' });
+  const privateReply = require('../lib/user-store').getReplyVisibility(userId) === 'private';
+  await interaction.deferReply({ ephemeral: true });
   const result = await dispatch({
     userId,
     group: 'tarot',
@@ -462,7 +471,7 @@ async function handleTarotButton(interaction) {
     args: {},
     prefix: PREFIX,
   });
-  await sendDispatchResult(interaction, result);
+  await deliverResult(interaction, result, { ephemeral: privateReply });
 }
 
 async function handleTarotSelect(interaction) {
@@ -478,7 +487,7 @@ async function handleTarotSelect(interaction) {
 async function handleTarotModal(interaction) {
   const userId = userIdFrom(interaction);
   const savedPrivate = require('../lib/user-store').getReplyVisibility(userId) === 'private';
-  await interaction.deferReply({ ephemeral: savedPrivate });
+  await interaction.deferReply({ ephemeral: true });
   const isSearch = interaction.customId === 'kabbak-tarot-search';
   const result = isSearch
     ? await dispatch({
@@ -495,13 +504,50 @@ async function handleTarotModal(interaction) {
       args: { name: interaction.fields.getTextInputValue('name') },
       prefix: PREFIX,
     });
-  await sendDispatchResult(interaction, result);
+  await deliverResult(interaction, result, { ephemeral: savedPrivate });
+}
+
+function plainContent(item) {
+  if (item?.layout !== 'plain') return '';
+  return [item.title ? `**${item.title}**` : '', item.description || ''].filter(Boolean).join('\n\n').slice(0, 2000);
+}
+
+function shouldStayPrivate(result) {
+  return asList(result).some((item) => {
+    if (!item || item.type === 'quiz') return false;
+    return item.ephemeral || item.buttons?.length || item.type === 'collect-secret';
+  });
+}
+
+async function deliverResult(interaction, result, { ephemeral = false } = {}) {
+  const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
+  if (!items.length) {
+    await interaction.editReply({ content: 'No result.', embeds: [], components: [] }).catch(() => {});
+    return;
+  }
+  if (ephemeral || shouldStayPrivate(result) || !interaction.channel) {
+    await interaction.editReply(dispatchPayload(items[0])).catch(() => {});
+    for (const item of items.slice(1)) {
+      const payload = dispatchPayload(item);
+      payload.ephemeral = true;
+      await interaction.followUp(payload).catch(() => {});
+    }
+    return;
+  }
+  await interaction.editReply({ content: 'Posted in the channel.', embeds: [], components: [] }).catch(() => {});
+  for (const item of items) {
+    await interaction.channel.send(dispatchPayload(item)).catch((error) => {
+      console.error('[discord] public post failed:', error?.message || error);
+    });
+  }
 }
 
 function dispatchPayload(item) {
   const files = item?.attachment?.buffer
     ? [new AttachmentBuilder(item.attachment.buffer, { name: item.attachment.name || 'image.jpg' })]
     : [];
+  const content = plainContent(item);
+  if (content) return { content, embeds: [], components: [], files };
   const embeds = toEmbeds(item);
   if (!embeds.length && files.length) {
     return { content: '', embeds: [], components: [], files };
@@ -528,13 +574,7 @@ async function followDispatchResult(interaction, result, { ephemeral = false } =
     return;
   }
   for (const item of items) {
-    const files = item?.attachment?.buffer
-      ? [new AttachmentBuilder(item.attachment.buffer, { name: item.attachment.name || 'image.jpg' })]
-      : [];
-    const embeds = toEmbeds(item);
-    const payload = !embeds.length && files.length
-      ? { files, components: [] }
-      : { embeds, components: [], files };
+    const payload = dispatchPayload(item);
     if (ephemeral) payload.ephemeral = true;
     await interaction.followUp(payload).catch(() => {});
   }
@@ -548,14 +588,8 @@ async function sendDispatchResult(interaction, result) {
   }
   for (let i = 0; i < items.length; i += 1) {
     const item = items[i];
-    const files = item?.attachment?.buffer
-      ? [new AttachmentBuilder(item.attachment.buffer, { name: item.attachment.name || 'image.jpg' })]
-      : [];
-    const embeds = toEmbeds(item);
-    const components = item.buttons?.length ? buttonRows(item.buttons) : [];
-    const payload = !embeds.length && files.length
-      ? { files, components: [] }
-      : { embeds, components, files };
+    const payload = dispatchPayload(item);
+    if (item.buttons?.length) payload.components = buttonRows(item.buttons);
     const send = i === 0 ? interaction.editReply(payload) : interaction.followUp(payload);
     await send.catch(() => {});
   }
@@ -639,11 +673,9 @@ async function handleChatCommand(interaction) {
 
   const replyMode = String(options?.getString?.('mode') || optionValue(interaction, 'visibility') || '').toLowerCase();
   const savedPrivate = require('../lib/user-store').getReplyVisibility(userIdFrom(interaction)) === 'private';
-  const ephemeral = (commandName === 'kabbak' && (group === 'api' || subcommand === 'config'))
-    || replyMode === 'private'
-    || (replyMode !== 'public' && savedPrivate);
+  const outputPrivate = replyMode === 'private' || (replyMode !== 'public' && savedPrivate);
   try {
-    await interaction.deferReply({ ephemeral });
+    await interaction.deferReply({ ephemeral: true });
   } catch (error) {
     if (error?.code === 10062) {
       console.warn(`[discord] ${commandName} already handled elsewhere (another bot instance?)`);
@@ -669,28 +701,7 @@ async function handleChatCommand(interaction) {
       return;
     }
 
-    const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
-    if (!items.length) {
-      await interaction.editReply({ content: 'No result.' }).catch(() => {});
-      return;
-    }
-    for (let i = 0; i < items.length; i += 1) {
-      const item = items[i];
-      const files = item?.attachment?.buffer
-        ? [new AttachmentBuilder(item.attachment.buffer, { name: item.attachment.name || 'image.jpg' })]
-        : [];
-      const embeds = toEmbeds(item);
-      const components = item.buttons?.length ? buttonRows(item.buttons) : [];
-      const payload = !embeds.length && files.length
-        ? { files, components: [] }
-        : { embeds, components, files };
-      const send = i === 0
-        ? interaction.editReply(payload)
-        : interaction.followUp(payload);
-      await send.catch((error) => {
-        if (error?.code !== 10062) console.error('[discord] reply failed:', error?.message || error);
-      });
-    }
+    await deliverResult(interaction, result, { ephemeral: outputPrivate });
   } catch (err) {
     console.error(err);
     await interaction.editReply({ content: `Error: ${err.message}` }).catch(() => {});
