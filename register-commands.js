@@ -142,7 +142,7 @@ const commands = [
       {
         type: 1,
         name: 'text',
-        description: 'Text menu: search the library, list sources, and read a section',
+        description: 'Text menu: search the library or read a section',
       },
       {
         type: 1,

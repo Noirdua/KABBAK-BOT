@@ -14,7 +14,7 @@ const {
 } = require('discord.js');
 const { accountId } = require('../lib/user-store');
 const { asList, truncate } = require('../lib/cards');
-const { suggest, getSpreadOptions, getDeckOptions, getTextCatalog } = require('../lib/catalog');
+const { suggest, getSpreadOptions, getDeckOptions, getTextCatalog, getSectionVerses, verseNumber } = require('../lib/catalog');
 const { dispatch, completeApiLogin, answerQuiz } = require('../lib/commands');
 
 const PREFIX = '/kabbak';
@@ -23,7 +23,7 @@ const textDrafts = new Map();
 
 function textDraft(userId) {
   if (!textDrafts.has(userId)) {
-    textDrafts.set(userId, { source: '', work: '', section: '', verse: '', query: '' });
+    textDrafts.set(userId, { source: '', work: '', section: '', verse: '', query: '', versePage: 0 });
   }
   return textDrafts.get(userId);
 }
@@ -263,15 +263,41 @@ async function textReadRows(draft) {
   const works = Array.isArray(source?.works) ? source.works : [];
   const work = works.find((entry) => String(entry.id) === draft.work) || null;
   const sections = Array.isArray(work?.sections) ? work.sections : [];
+  const verses = draft.source && draft.work && draft.section
+    ? await getSectionVerses(draft.source, draft.work, draft.section).catch(() => [])
+    : [];
   return [
     selectRow('text:set:source', 'Source', selectChoices(sources, draft.source, (item) => item.title || item.name || item.id, (item) => item.id)),
     selectRow('text:set:work', 'Work', selectChoices(works, draft.work, (item) => item.title || item.name || item.id, (item) => item.id)),
     selectRow('text:set:section', 'Section', selectChoices(sections, draft.section, (item) => item.title || item.name || item.id, (item) => item.id)),
+    selectRow('text:set:verse', 'Verse', verseChoices(verses, draft)),
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId('text:verse').setLabel(draft.verse ? `Verse: ${draft.verse}`.slice(0, 80) : 'Verse (optional)').setStyle(ButtonStyle.Secondary),
       new ButtonBuilder().setCustomId('text:run:section').setLabel('Read').setStyle(ButtonStyle.Primary)
     ),
   ];
+}
+
+function verseChoices(verses, draft) {
+  const pageSize = 22;
+  const page = Math.max(0, Number(draft.versePage) || 0);
+  const start = page * pageSize;
+  const rows = [{ label: 'Whole section', value: '-' }];
+  if (page > 0) rows.push({ label: 'Previous verses', value: '__prev' });
+  verses.slice(start, start + pageSize).forEach((verse, index) => {
+    const number = verseNumber(verse, start + index);
+    const preview = String(verse?.text || verse?.body || '').replace(/\s+/g, ' ').trim().slice(0, 70);
+    rows.push({
+      label: (preview ? `${number} — ${preview}` : String(number)).slice(0, 100),
+      value: String(number),
+    });
+  });
+  if (start + pageSize < verses.length) rows.push({ label: 'More verses', value: '__next' });
+  if (!draft.section) rows.splice(1, rows.length - 1, { label: 'Pick a section first', value: '__wait' });
+  const selected = draft.verse && rows.some((row) => row.value === String(draft.verse)) ? String(draft.verse) : '-';
+  return rows.slice(0, 25).map((row) => new StringSelectMenuOptionBuilder()
+    .setLabel(row.label)
+    .setValue(row.value)
+    .setDefault(row.value === selected));
 }
 
 async function handleTextButton(interaction) {
@@ -294,10 +320,6 @@ async function handleTextButton(interaction) {
   }
   if (customId === 'text:query') {
     await interaction.showModal(tarotTextModal('kabbak-text-query', 'Search query', 'query', 'Words to find', true));
-    return;
-  }
-  if (customId === 'text:verse') {
-    await interaction.showModal(tarotTextModal('kabbak-text-verse', 'Verse', 'verse', 'Verse number, or leave blank', false));
     return;
   }
   if (customId === 'text:run:search' || customId === 'text:run:section') {
@@ -349,6 +371,13 @@ async function handleTextSelect(interaction) {
     draft.section = '';
   } else if (key === 'section') {
     draft.section = value;
+    draft.verse = '';
+    draft.versePage = 0;
+  } else if (key === 'verse') {
+    if (value === '__next') draft.versePage = (Number(draft.versePage) || 0) + 1;
+    else if (value === '__prev') draft.versePage = Math.max(0, (Number(draft.versePage) || 0) - 1);
+    else if (value && value !== '__wait') draft.verse = value;
+    else draft.verse = '';
   }
   const rows = interaction.message?.embeds?.[0]?.title === 'Read'
     ? await textReadRows(draft)
@@ -366,11 +395,7 @@ async function handleTextModal(interaction) {
     }).catch(() => {});
     return;
   }
-  draft.verse = String(interaction.fields.getTextInputValue('verse') || '').trim();
-  await interaction.update({
-    embeds: toEmbeds({ title: 'Read', description: 'Pick a source, work, and section, then Read.' }),
-    components: await textReadRows(draft),
-  }).catch(() => {});
+  await interaction.reply({ content: 'Use the verse list on the Read form.', ephemeral: true }).catch(() => {});
 }
 
 async function handleTarotButton(interaction) {
