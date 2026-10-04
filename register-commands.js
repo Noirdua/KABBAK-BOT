@@ -55,45 +55,13 @@ const commands = [
       },
       {
         type: 1,
-        name: 'natal',
-        description: 'Natal chart (sun, moon, rising, planets, aspects)',
-        options: [
-          { name: 'date', type: 3, description: 'Birth date (YYYY-MM-DD)', required: true },
-          { name: 'time', type: 3, description: 'Birth time (HH:MM). Place comes from your connected API profile.', required: false },
-        ],
-      },
-      {
-        type: 1,
         name: 'calendar',
         description: 'Upcoming week events from your connected API location',
       },
       {
         type: 1,
-        name: 'tattva',
-        description: 'Look up a Golden Dawn tattva, or list the five primaries',
-        options: [
-          {
-            name: 'tattva',
-            type: 3,
-            description: 'Tattva id or name (Akasha, Tejas of Vayu, …)',
-            required: false,
-            autocomplete: true,
-          },
-        ],
-      },
-      {
-        type: 1,
         name: 'iching',
         description: 'I Ching menu: draw a spread or look up a hexagram',
-      },
-      {
-        type: 1,
-        name: 'relations',
-        description: 'Show how a correspondence connects to the rest of the tree',
-        options: [
-          { name: 'kind', type: 3, description: 'Entity kind, e.g. sephirah, planet, sign, kabbalah-path', required: true },
-          { name: 'id', type: 3, description: 'Entity id or name, e.g. keter or aries', required: true },
-        ],
       },
       {
         type: 1,
