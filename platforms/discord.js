@@ -257,10 +257,7 @@ async function handleTarotButton(interaction) {
   if (customId === 'tarot:run:draw') {
     const savedPrivate = require('../lib/user-store').getReplyVisibility(userId) === 'private';
     const ephemeral = draft.private || savedPrivate;
-    await interaction.update({
-      embeds: toEmbeds({ title: 'Draw', description: ephemeral ? 'Sent privately.' : 'Drawing…' }),
-      components: [],
-    }).catch(() => {});
+    await interaction.deferUpdate();
     const result = await dispatch({
       userId,
       group: 'tarot',
@@ -275,7 +272,15 @@ async function handleTarotButton(interaction) {
       },
       prefix: PREFIX,
     });
-    await followDispatchResult(interaction, result, { ephemeral });
+    if (ephemeral && !interaction.ephemeral) {
+      const removed = await interaction.deleteReply().then(() => true).catch(() => false);
+      if (!removed) {
+        await interaction.editReply({ content: 'Sent privately.', embeds: [], components: [], files: [] }).catch(() => {});
+      }
+      await followDispatchResult(interaction, result, { ephemeral: true });
+      return;
+    }
+    await editDispatchResult(interaction, result);
     return;
   }
   const subcommand = customId.split(':')[2];
@@ -321,6 +326,29 @@ async function handleTarotModal(interaction) {
       prefix: PREFIX,
     });
   await sendDispatchResult(interaction, result);
+}
+
+function dispatchPayload(item) {
+  const files = item?.attachment?.buffer
+    ? [new AttachmentBuilder(item.attachment.buffer, { name: item.attachment.name || 'image.jpg' })]
+    : [];
+  const embeds = toEmbeds(item);
+  if (!embeds.length && files.length) {
+    return { content: '', embeds: [], components: [], files };
+  }
+  return { content: '', embeds, components: [], files };
+}
+
+async function editDispatchResult(interaction, result) {
+  const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
+  if (!items.length) {
+    await interaction.editReply({ content: 'No result.', embeds: [], components: [], files: [] }).catch(() => {});
+    return;
+  }
+  await interaction.editReply(dispatchPayload(items[0])).catch(() => {});
+  for (const item of items.slice(1)) {
+    await interaction.followUp(dispatchPayload(item)).catch(() => {});
+  }
 }
 
 async function followDispatchResult(interaction, result, { ephemeral = false } = {}) {
