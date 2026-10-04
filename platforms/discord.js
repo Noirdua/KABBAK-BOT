@@ -47,6 +47,7 @@ function readArgs(options) {
     category: options?.getString?.('category'),
     count: options?.getInteger?.('count'),
     deck: options?.getString?.('deck'),
+    mode: options?.getString?.('mode'),
     template: options?.getString?.('template'),
     stitch: options?.getBoolean?.('stitch'),
     reversed: options?.getBoolean?.('reversed'),
@@ -197,7 +198,11 @@ async function handleChatCommand(interaction) {
     return;
   }
 
-  const ephemeral = commandName === 'kabbak' && group === 'api';
+  const replyMode = String(options?.getString?.('mode') || '').toLowerCase();
+  const savedPrivate = require('../lib/user-store').getReplyVisibility(userIdFrom(interaction)) === 'private';
+  const ephemeral = (commandName === 'kabbak' && group === 'api')
+    || savedPrivate
+    || (commandName === 'kabbak' && subcommand === 'reply' && replyMode === 'private');
   try {
     await interaction.deferReply({ ephemeral });
   } catch (error) {

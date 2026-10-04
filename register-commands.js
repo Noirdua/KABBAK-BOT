@@ -19,6 +19,23 @@ const commands = [
       },
       {
         type: 1,
+        name: 'reply',
+        description: 'Choose whether your replies are public or only visible to you',
+        options: [
+          {
+            name: 'mode',
+            type: 3,
+            description: 'public (default) or private',
+            required: true,
+            choices: [
+              { name: 'public', value: 'public' },
+              { name: 'private', value: 'private' },
+            ],
+          },
+        ],
+      },
+      {
+        type: 1,
         name: 'status',
         description: 'KABBAK API health and version',
       },
