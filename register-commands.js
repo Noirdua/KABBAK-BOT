@@ -20,7 +20,7 @@ function addVisibilityOption(option) {
   if (Array.isArray(option.options)) {
     option.options = option.options.map(addVisibilityOption);
   }
-  if (option.type === 1 && !['reply', 'login', 'config', 'tarot', 'text'].includes(option.name)) {
+  if (option.type === 1 && !['reply', 'login', 'config', 'tarot', 'text', 'iching'].includes(option.name)) {
     const options = Array.isArray(option.options) ? option.options : [];
     if (!options.some((entry) => entry.name === 'visibility')) {
       option.options = [...options, VISIBILITY_OPTION];
@@ -43,11 +43,6 @@ const commands = [
         type: 1,
         name: 'config',
         description: 'Account settings: API key and whether replies are public or private',
-      },
-      {
-        type: 1,
-        name: 'decks',
-        description: 'List available tarot decks',
       },
       {
         type: 1,
@@ -89,16 +84,7 @@ const commands = [
       {
         type: 1,
         name: 'iching',
-        description: 'Cast an I-Ching hexagram (random, or pick a number)',
-        options: [
-          {
-            name: 'number',
-            type: 4,
-            description: 'Hexagram number 1-64 (type to search, omit for a random cast)',
-            required: false,
-            autocomplete: true,
-          },
-        ],
+        description: 'I Ching menu: draw a spread or look up a hexagram',
       },
       {
         type: 1,

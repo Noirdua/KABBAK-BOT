@@ -19,6 +19,7 @@ const { dispatch, completeApiLogin, answerQuiz } = require('../lib/commands');
 
 const PREFIX = '/kabbak';
 const tarotDrafts = new Map();
+const ichingDrafts = new Map();
 const textDrafts = new Map();
 
 function textDraft(userId) {
@@ -26,6 +27,19 @@ function textDraft(userId) {
     textDrafts.set(userId, { source: '', work: '', section: '', verse: '', query: '', versePage: 0 });
   }
   return textDrafts.get(userId);
+}
+
+function ichingDraft(userId) {
+  if (!ichingDrafts.has(userId)) {
+    ichingDrafts.set(userId, {
+      spread: 'three-card',
+      deck: '',
+      template: '',
+      stitch: true,
+      private: false,
+    });
+  }
+  return ichingDrafts.get(userId);
 }
 
 function tarotDraft(userId) {
@@ -70,23 +84,30 @@ function selectRow(customId, placeholder, choices) {
   );
 }
 
-async function tarotDrawRows(draft) {
+async function oracleDrawRows(draft, system) {
+  const prefix = system === 'iching' ? 'iching' : 'tarot';
   const spreads = await getSpreadOptions().catch(() => []);
   const decks = (await getDeckOptions().catch(() => []))
-    .filter((deck) => String(deck?.system || 'tarot').trim().toLowerCase() === 'tarot');
+    .filter((deck) => String(deck?.system || 'tarot').trim().toLowerCase() === system);
   const templates = require('../lib/spread-templates').listTemplates();
-  const toggles = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId('tarot:toggle:stitch').setLabel(draft.stitch ? 'Stitch: on' : 'Stitch: off').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('tarot:toggle:reversed').setLabel(draft.reversed ? 'Reversed: on' : 'Reversed: off').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('tarot:toggle:private').setLabel(draft.private ? 'Private' : 'Public').setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId('tarot:run:draw').setLabel('Draw').setStyle(ButtonStyle.Primary)
-  );
-  return [
-    selectRow('tarot:set:spread', 'Spread', selectChoices(spreads, draft.spread, (item) => item.label || item.name || item.id, (item) => item.id)),
-    selectRow('tarot:set:deck', 'Deck', selectChoices(decks, draft.deck, (item) => item.label || item.name || item.id, (item) => item.id)),
-    selectRow('tarot:set:template', 'Template', selectChoices(templates, draft.template, (item) => item.name || item.id, (item) => item.id)),
-    toggles,
+  const toggles = [
+    new ButtonBuilder().setCustomId(`${prefix}:toggle:stitch`).setLabel(draft.stitch ? 'Stitch: on' : 'Stitch: off').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`${prefix}:toggle:private`).setLabel(draft.private ? 'Private' : 'Public').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId(`${prefix}:run:draw`).setLabel('Draw').setStyle(ButtonStyle.Primary),
   ];
+  if (system !== 'iching') {
+    toggles.splice(1, 0, new ButtonBuilder().setCustomId('tarot:toggle:reversed').setLabel(draft.reversed ? 'Reversed: on' : 'Reversed: off').setStyle(ButtonStyle.Secondary));
+  }
+  return [
+    selectRow(`${prefix}:set:spread`, 'Spread', selectChoices(spreads, draft.spread, (item) => item.label || item.name || item.id, (item) => item.id)),
+    selectRow(`${prefix}:set:deck`, 'Deck', selectChoices(decks, draft.deck, (item) => item.label || item.name || item.id, (item) => item.id)),
+    selectRow(`${prefix}:set:template`, 'Template', selectChoices(templates, draft.template, (item) => item.name || item.id, (item) => item.id)),
+    new ActionRowBuilder().addComponents(...toggles),
+  ];
+}
+
+async function tarotDrawRows(draft) {
+  return oracleDrawRows(draft, 'tarot');
 }
 
 function tarotTextModal(customId, title, fieldId, label, required) {
@@ -407,6 +428,71 @@ async function handleTextModal(interaction) {
     return;
   }
   await interaction.reply({ content: 'Use the verse list on the Read form.', ephemeral: true }).catch(() => {});
+}
+
+async function handleIChingButton(interaction) {
+  if (await rejectStranger(interaction)) return;
+  const userId = userIdFrom(interaction);
+  const customId = String(interaction.customId || '');
+  const draft = ichingDraft(userId);
+  if (customId === 'iching:menu:hexagram') {
+    await interaction.showModal(tarotTextModal('kabbak-iching-hexagram', 'Look up a hexagram', 'number', 'Hexagram number 1-64', true));
+    return;
+  }
+  if (customId === 'iching:menu:draw') {
+    draft.private = require('../lib/user-store').getReplyVisibility(userId) === 'private';
+    await interaction.update({
+      embeds: toEmbeds({ title: 'I Ching draw', description: 'Pick a spread and an I Ching deck, then press Draw.' }),
+      components: await oracleDrawRows(draft, 'iching'),
+    }).catch(() => {});
+    return;
+  }
+  if (customId.startsWith('iching:toggle:')) {
+    const key = customId.split(':')[2];
+    if (key === 'stitch' || key === 'private') draft[key] = !draft[key];
+    await interaction.update({ components: await oracleDrawRows(draft, 'iching') }).catch(() => {});
+    return;
+  }
+  if (customId !== 'iching:run:draw') return;
+  const savedPrivate = require('../lib/user-store').getReplyVisibility(userId) === 'private';
+  const ephemeral = draft.private || savedPrivate;
+  await interaction.deferUpdate();
+  const result = await dispatch({
+    userId,
+    subcommand: 'iching',
+    args: {
+      action: 'draw',
+      spread: draft.spread && draft.spread !== '-' ? draft.spread : 'three-card',
+      deck: draft.deck && draft.deck !== '-' ? draft.deck : '',
+      template: draft.template && draft.template !== '-' ? draft.template : '',
+      stitch: draft.stitch,
+      visibility: ephemeral ? 'private' : 'public',
+    },
+    prefix: PREFIX,
+  });
+  await editDispatchResult(interaction, result);
+}
+
+async function handleIChingSelect(interaction) {
+  if (await rejectStranger(interaction)) return;
+  const draft = ichingDraft(userIdFrom(interaction));
+  const key = String(interaction.customId || '').split(':')[2];
+  const value = interaction.values?.[0] === '-' ? '' : (interaction.values?.[0] || '');
+  if (key === 'spread' || key === 'deck' || key === 'template') draft[key] = value;
+  await interaction.update({ components: await oracleDrawRows(draft, 'iching') }).catch(() => {});
+}
+
+async function handleIChingModal(interaction) {
+  const userId = userIdFrom(interaction);
+  const savedPrivate = require('../lib/user-store').getReplyVisibility(userId) === 'private';
+  await interaction.deferReply({ ephemeral: true });
+  const result = await dispatch({
+    userId,
+    subcommand: 'iching',
+    args: { number: interaction.fields.getTextInputValue('number') },
+    prefix: PREFIX,
+  });
+  await deliverResult(interaction, result, { ephemeral: savedPrivate });
 }
 
 async function handleTarotButton(interaction) {
@@ -767,6 +853,10 @@ async function start() {
         await handleTarotButton(interaction);
         return;
       }
+      if (customId.startsWith('iching:')) {
+        await handleIChingButton(interaction);
+        return;
+      }
       if (customId.startsWith('text:')) {
         await handleTextButton(interaction);
         return;
@@ -778,12 +868,20 @@ async function start() {
       await handleTarotSelect(interaction);
       return;
     }
+    if (interaction.isStringSelectMenu() && String(interaction.customId || '').startsWith('iching:set:')) {
+      await handleIChingSelect(interaction);
+      return;
+    }
     if (interaction.isStringSelectMenu() && String(interaction.customId || '').startsWith('text:set:')) {
       await handleTextSelect(interaction);
       return;
     }
     if (interaction.isModalSubmit() && String(interaction.customId || '').startsWith('kabbak-tarot-')) {
       await handleTarotModal(interaction);
+      return;
+    }
+    if (interaction.isModalSubmit() && interaction.customId === 'kabbak-iching-hexagram') {
+      await handleIChingModal(interaction);
       return;
     }
     if (interaction.isModalSubmit() && String(interaction.customId || '').startsWith('kabbak-text-')) {
