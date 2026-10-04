@@ -448,17 +448,17 @@ async function handleTarotButton(interaction) {
       },
       prefix: PREFIX,
     });
-    if (ephemeral) {
+    const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
+    if (ephemeral || !items.length) {
+      await editDispatchResult(interaction, result);
+      return;
+    }
+    const posted = await postPublic(interaction, items);
+    if (!posted) {
       await editDispatchResult(interaction, result);
       return;
     }
     await interaction.editReply({ content: 'Posted in the channel.', embeds: [], components: [] }).catch(() => {});
-    if (interaction.channel) {
-      const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
-      for (const item of items) {
-        await interaction.channel.send(dispatchPayload(item)).catch(() => {});
-      }
-    }
     return;
   }
   const subcommand = customId.split(':')[2];
@@ -519,27 +519,54 @@ function shouldStayPrivate(result) {
   });
 }
 
+async function publicChannel(interaction) {
+  if (interaction.channel && typeof interaction.channel.send === 'function') return interaction.channel;
+  if (!interaction.channelId) return null;
+  return interaction.client.channels.fetch(interaction.channelId).catch((error) => {
+    console.error('[discord] channel fetch failed:', error?.message || error);
+    return null;
+  });
+}
+
+async function postPublic(interaction, items) {
+  const channel = await publicChannel(interaction);
+  if (!channel) return false;
+  try {
+    for (const item of items) {
+      await channel.send(dispatchPayload(item));
+    }
+    return true;
+  } catch (error) {
+    console.error('[discord] public post failed:', error?.message || error);
+    return false;
+  }
+}
+
+async function showPrivate(interaction, items) {
+  await interaction.editReply(dispatchPayload(items[0])).catch(() => {});
+  for (const item of items.slice(1)) {
+    const payload = dispatchPayload(item);
+    payload.ephemeral = true;
+    await interaction.followUp(payload).catch(() => {});
+  }
+}
+
 async function deliverResult(interaction, result, { ephemeral = false } = {}) {
   const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
   if (!items.length) {
     await interaction.editReply({ content: 'No result.', embeds: [], components: [] }).catch(() => {});
     return;
   }
-  if (ephemeral || shouldStayPrivate(result) || !interaction.channel) {
-    await interaction.editReply(dispatchPayload(items[0])).catch(() => {});
-    for (const item of items.slice(1)) {
-      const payload = dispatchPayload(item);
-      payload.ephemeral = true;
-      await interaction.followUp(payload).catch(() => {});
-    }
+  if (ephemeral || shouldStayPrivate(result)) {
+    await showPrivate(interaction, items);
     return;
   }
-  await interaction.editReply({ content: 'Posted in the channel.', embeds: [], components: [] }).catch(() => {});
-  for (const item of items) {
-    await interaction.channel.send(dispatchPayload(item)).catch((error) => {
-      console.error('[discord] public post failed:', error?.message || error);
-    });
+  const posted = await postPublic(interaction, items);
+  if (posted) {
+    await interaction.editReply({ content: 'Posted in the channel.', embeds: [], components: [] }).catch(() => {});
+    return;
   }
+  await showPrivate(interaction, items);
 }
 
 function dispatchPayload(item) {
