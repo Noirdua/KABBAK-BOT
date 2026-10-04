@@ -115,6 +115,7 @@ function readArgs(options) {
     longitude: options?.getNumber?.('longitude'),
     label: options?.getString?.('label'),
     date: options?.getString?.('date'),
+    timezone: options?.getString?.('timezone'),
     time: options?.getString?.('time'),
     number: options?.getInteger?.('number'),
     tattva: options?.getString?.('tattva'),

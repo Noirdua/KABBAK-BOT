@@ -46,11 +46,6 @@ const commands = [
       },
       {
         type: 1,
-        name: 'status',
-        description: 'KABBAK API health and version',
-      },
-      {
-        type: 1,
         name: 'decks',
         description: 'List available tarot decks',
       },
@@ -59,12 +54,7 @@ const commands = [
         name: 'now',
         description: 'Current astrological snapshot (planetary hour, moon, decan, planets)',
         options: [
-          { name: 'location', type: 3, description: 'Place (type a city, e.g. Los Angeles)', required: false, autocomplete: true },
-          { name: 'country', type: 3, description: 'Country (type to search)', required: false, autocomplete: true },
-          { name: 'region', type: 3, description: 'State/region (type to search)', required: false, autocomplete: true },
-          { name: 'city', type: 3, description: 'City (type to search)', required: false, autocomplete: true },
-          { name: 'latitude', type: 10, description: 'Latitude (decimal degrees)', required: false },
-          { name: 'longitude', type: 10, description: 'Longitude (decimal degrees)', required: false },
+          { name: 'timezone', type: 3, description: 'Timezone (type to search). Uses your API location if connected.', required: false, autocomplete: true },
           { name: 'date', type: 3, description: 'Optional date override (ISO, e.g. 2026-08-25)', required: false },
         ],
       },
@@ -74,27 +64,13 @@ const commands = [
         description: 'Natal chart (sun, moon, rising, planets, aspects)',
         options: [
           { name: 'date', type: 3, description: 'Birth date (YYYY-MM-DD)', required: true },
-          { name: 'time', type: 3, description: 'Birth time (HH:MM, local mean time at the place)', required: false },
-          { name: 'location', type: 3, description: 'Birth place (type a city, e.g. Los Angeles)', required: false, autocomplete: true },
-          { name: 'country', type: 3, description: 'Country (type to search)', required: false, autocomplete: true },
-          { name: 'region', type: 3, description: 'State/region (type to search)', required: false, autocomplete: true },
-          { name: 'city', type: 3, description: 'City (type to search)', required: false, autocomplete: true },
-          { name: 'latitude', type: 10, description: 'Latitude (decimal degrees)', required: false },
-          { name: 'longitude', type: 10, description: 'Longitude (decimal degrees)', required: false },
+          { name: 'time', type: 3, description: 'Birth time (HH:MM). Place comes from your connected API profile.', required: false },
         ],
       },
       {
         type: 1,
         name: 'calendar',
-        description: 'Upcoming week events (moon phases, planetary hours)',
-        options: [
-          { name: 'location', type: 3, description: 'Place (type a city, e.g. Los Angeles)', required: false, autocomplete: true },
-          { name: 'country', type: 3, description: 'Country (type to search)', required: false, autocomplete: true },
-          { name: 'region', type: 3, description: 'State/region (type to search)', required: false, autocomplete: true },
-          { name: 'city', type: 3, description: 'City (type to search)', required: false, autocomplete: true },
-          { name: 'latitude', type: 10, description: 'Latitude (decimal degrees)', required: false },
-          { name: 'longitude', type: 10, description: 'Longitude (decimal degrees)', required: false },
-        ],
+        description: 'Upcoming week events from your connected API location',
       },
       {
         type: 1,
@@ -164,32 +140,20 @@ const commands = [
         ],
       },
       {
-        type: 1,
-        name: 'search',
-        description: 'Search the KABBAK text library (full verses)',
-        options: [
-          { name: 'query', type: 3, description: 'Search query', required: true },
-          {
-            name: 'source',
-            type: 3,
-            description: 'Limit to one book/source (type to search)',
-            required: false,
-            autocomplete: true,
-          },
-          {
-            name: 'work',
-            type: 3,
-            description: 'Limit to one work (type to search)',
-            required: false,
-            autocomplete: true,
-          },
-        ],
-      },
-      {
         type: 2,
         name: 'text',
-        description: 'Read passages from the text library',
+        description: 'Search and read the text library',
         options: [
+          {
+            type: 1,
+            name: 'search',
+            description: 'Search the library (full verses)',
+            options: [
+              { name: 'query', type: 3, description: 'Search query', required: true },
+              { name: 'source', type: 3, description: 'Limit to one book/source (type to search)', required: false, autocomplete: true },
+              { name: 'work', type: 3, description: 'Limit to one work (type to search)', required: false, autocomplete: true },
+            ],
+          },
           {
             type: 1,
             name: 'sources',
@@ -237,29 +201,7 @@ const commands = [
         name: 'tarot',
         description: 'Tarot menu: draw, look up a card, search, and templates',
       },
-      {
-        type: 2,
-        name: 'location',
-        description: 'Your saved location (used by now and calendar)',
-        options: [
-          { type: 1, name: 'view', description: 'Show your saved location' },
-          {
-            type: 1,
-            name: 'set',
-            description: 'Save a location for now and calendar',
-            options: [
-              { name: 'location', type: 3, description: 'Place (type a city, e.g. Los Angeles)', required: false, autocomplete: true },
-              { name: 'country', type: 3, description: 'Country (type to search)', required: false, autocomplete: true },
-              { name: 'region', type: 3, description: 'State/region (type to search)', required: false, autocomplete: true },
-              { name: 'city', type: 3, description: 'City (type to search)', required: false, autocomplete: true },
-              { name: 'latitude', type: 10, description: 'Latitude (e.g. 40.7128)', required: false },
-              { name: 'longitude', type: 10, description: 'Longitude (e.g. -74.0060)', required: false },
-              { name: 'label', type: 3, description: 'Optional label (e.g. Home)', required: false },
-            ],
-          },
-          { type: 1, name: 'clear', description: 'Remove your saved location' },
-        ],
-      },
+
 
     ],
   },
