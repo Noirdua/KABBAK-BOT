@@ -20,7 +20,7 @@ function addVisibilityOption(option) {
   if (Array.isArray(option.options)) {
     option.options = option.options.map(addVisibilityOption);
   }
-  if (option.type === 1 && option.name !== 'reply' && option.name !== 'login' && option.name !== 'config' && option.name !== 'tarot') {
+  if (option.type === 1 && !['reply', 'login', 'config', 'tarot', 'text'].includes(option.name)) {
     const options = Array.isArray(option.options) ? option.options : [];
     if (!options.some((entry) => entry.name === 'visibility')) {
       option.options = [...options, VISIBILITY_OPTION];
@@ -140,61 +140,9 @@ const commands = [
         ],
       },
       {
-        type: 2,
+        type: 1,
         name: 'text',
-        description: 'Search and read the text library',
-        options: [
-          {
-            type: 1,
-            name: 'search',
-            description: 'Search the library (full verses)',
-            options: [
-              { name: 'query', type: 3, description: 'Search query', required: true },
-              { name: 'source', type: 3, description: 'Limit to one book/source (type to search)', required: false, autocomplete: true },
-              { name: 'work', type: 3, description: 'Limit to one work (type to search)', required: false, autocomplete: true },
-            ],
-          },
-          {
-            type: 1,
-            name: 'sources',
-            description: 'List available text sources (books)',
-          },
-          {
-            type: 1,
-            name: 'section',
-            description: 'Read a section of a book (full verses)',
-            options: [
-              {
-                name: 'source',
-                type: 3,
-                description: 'Book/source (type to search)',
-                required: true,
-                autocomplete: true,
-              },
-              {
-                name: 'work',
-                type: 3,
-                description: 'Work (type to search)',
-                required: true,
-                autocomplete: true,
-              },
-              {
-                name: 'section',
-                type: 3,
-                description: 'Section/chapter (type to search)',
-                required: true,
-                autocomplete: true,
-              },
-              {
-                name: 'verse',
-                type: 3,
-                description: 'Verse (type a number; Discord shows 25 at a time). Omit for random',
-                required: false,
-                autocomplete: true,
-              },
-            ],
-          },
-        ],
+        description: 'Text menu: search the library, list sources, and read a section',
       },
       {
         type: 1,

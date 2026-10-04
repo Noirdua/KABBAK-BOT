@@ -14,11 +14,19 @@ const {
 } = require('discord.js');
 const { accountId } = require('../lib/user-store');
 const { asList, truncate } = require('../lib/cards');
-const { suggest, getSpreadOptions, getDeckOptions } = require('../lib/catalog');
+const { suggest, getSpreadOptions, getDeckOptions, getTextCatalog } = require('../lib/catalog');
 const { dispatch, completeApiLogin, answerQuiz } = require('../lib/commands');
 
 const PREFIX = '/kabbak';
 const tarotDrafts = new Map();
+const textDrafts = new Map();
+
+function textDraft(userId) {
+  if (!textDrafts.has(userId)) {
+    textDrafts.set(userId, { source: '', work: '', section: '', verse: '', query: '' });
+  }
+  return textDrafts.get(userId);
+}
 
 function tarotDraft(userId) {
   if (!tarotDrafts.has(userId)) {
@@ -227,6 +235,142 @@ async function handleAutocomplete(interaction) {
     console.error('[discord] autocomplete failed:', error?.message || error);
     await interaction.respond([]).catch(() => {});
   }
+}
+
+async function textCatalog() {
+  return getTextCatalog().catch(() => ({ sources: [] }));
+}
+
+async function textSearchRows(draft) {
+  const catalog = await textCatalog();
+  const sources = Array.isArray(catalog.sources) ? catalog.sources : [];
+  const source = sources.find((entry) => String(entry.id) === draft.source) || null;
+  const works = Array.isArray(source?.works) ? source.works : [];
+  return [
+    selectRow('text:set:source', 'Source (optional)', selectChoices(sources, draft.source, (item) => item.title || item.name || item.id, (item) => item.id)),
+    selectRow('text:set:work', 'Work (optional)', selectChoices(works, draft.work, (item) => item.title || item.name || item.id, (item) => item.id)),
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('text:query').setLabel(draft.query ? `Query: ${draft.query}`.slice(0, 80) : 'Set query').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('text:run:search').setLabel('Search').setStyle(ButtonStyle.Primary)
+    ),
+  ];
+}
+
+async function textReadRows(draft) {
+  const catalog = await textCatalog();
+  const sources = Array.isArray(catalog.sources) ? catalog.sources : [];
+  const source = sources.find((entry) => String(entry.id) === draft.source) || null;
+  const works = Array.isArray(source?.works) ? source.works : [];
+  const work = works.find((entry) => String(entry.id) === draft.work) || null;
+  const sections = Array.isArray(work?.sections) ? work.sections : [];
+  return [
+    selectRow('text:set:source', 'Source', selectChoices(sources, draft.source, (item) => item.title || item.name || item.id, (item) => item.id)),
+    selectRow('text:set:work', 'Work', selectChoices(works, draft.work, (item) => item.title || item.name || item.id, (item) => item.id)),
+    selectRow('text:set:section', 'Section', selectChoices(sections, draft.section, (item) => item.title || item.name || item.id, (item) => item.id)),
+    new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId('text:verse').setLabel(draft.verse ? `Verse: ${draft.verse}`.slice(0, 80) : 'Verse (optional)').setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId('text:run:section').setLabel('Read').setStyle(ButtonStyle.Primary)
+    ),
+  ];
+}
+
+async function handleTextButton(interaction) {
+  const userId = userIdFrom(interaction);
+  const customId = String(interaction.customId || '');
+  const draft = textDraft(userId);
+  if (customId === 'text:menu:search') {
+    await interaction.update({
+      embeds: toEmbeds({ title: 'Search', description: 'Pick a source if you want, set a query, then Search.' }),
+      components: await textSearchRows(draft),
+    }).catch(() => {});
+    return;
+  }
+  if (customId === 'text:menu:section') {
+    await interaction.update({
+      embeds: toEmbeds({ title: 'Read', description: 'Pick a source, work, and section, then Read.' }),
+      components: await textReadRows(draft),
+    }).catch(() => {});
+    return;
+  }
+  if (customId === 'text:query') {
+    await interaction.showModal(tarotTextModal('kabbak-text-query', 'Search query', 'query', 'Words to find', true));
+    return;
+  }
+  if (customId === 'text:verse') {
+    await interaction.showModal(tarotTextModal('kabbak-text-verse', 'Verse', 'verse', 'Verse number, or leave blank', false));
+    return;
+  }
+  if (customId === 'text:run:search' || customId === 'text:run:section') {
+    await interaction.deferUpdate();
+    const savedPrivate = require('../lib/user-store').getReplyVisibility(userId) === 'private';
+    const result = customId === 'text:run:search'
+      ? await dispatch({
+        userId,
+        group: 'text',
+        subcommand: 'search',
+        args: { query: draft.query, source: draft.source, work: draft.work },
+        prefix: PREFIX,
+      })
+      : await dispatch({
+        userId,
+        group: 'text',
+        subcommand: 'section',
+        args: {
+          source: draft.source,
+          work: draft.work,
+          section: draft.section,
+          verse: draft.verse,
+        },
+        prefix: PREFIX,
+      });
+    if (savedPrivate && !interaction.ephemeral) {
+      await interaction.deleteReply().catch(() => {});
+      await followDispatchResult(interaction, result, { ephemeral: true });
+      return;
+    }
+    await editDispatchResult(interaction, result);
+    return;
+  }
+  await interaction.deferReply({ ephemeral: require('../lib/user-store').getReplyVisibility(userId) === 'private' });
+  const result = await dispatch({ userId, group: 'text', subcommand: 'sources', args: {}, prefix: PREFIX });
+  await sendDispatchResult(interaction, result);
+}
+
+async function handleTextSelect(interaction) {
+  const draft = textDraft(userIdFrom(interaction));
+  const key = String(interaction.customId || '').split(':')[2];
+  const value = interaction.values?.[0] === '-' ? '' : (interaction.values?.[0] || '');
+  if (key === 'source') {
+    draft.source = value;
+    draft.work = '';
+    draft.section = '';
+  } else if (key === 'work') {
+    draft.work = value;
+    draft.section = '';
+  } else if (key === 'section') {
+    draft.section = value;
+  }
+  const rows = interaction.message?.embeds?.[0]?.title === 'Read'
+    ? await textReadRows(draft)
+    : await textSearchRows(draft);
+  await interaction.update({ components: rows }).catch(() => {});
+}
+
+async function handleTextModal(interaction) {
+  const draft = textDraft(userIdFrom(interaction));
+  if (interaction.customId === 'kabbak-text-query') {
+    draft.query = String(interaction.fields.getTextInputValue('query') || '').trim();
+    await interaction.update({
+      embeds: toEmbeds({ title: 'Search', description: draft.query ? `Query: ${draft.query}` : 'Set a query, then Search.' }),
+      components: await textSearchRows(draft),
+    }).catch(() => {});
+    return;
+  }
+  draft.verse = String(interaction.fields.getTextInputValue('verse') || '').trim();
+  await interaction.update({
+    embeds: toEmbeds({ title: 'Read', description: 'Pick a source, work, and section, then Read.' }),
+    components: await textReadRows(draft),
+  }).catch(() => {});
 }
 
 async function handleTarotButton(interaction) {
@@ -559,6 +703,10 @@ async function start() {
         await handleTarotButton(interaction);
         return;
       }
+      if (customId.startsWith('text:')) {
+        await handleTextButton(interaction);
+        return;
+      }
       await handleQuizButton(interaction);
       return;
     }
@@ -566,8 +714,16 @@ async function start() {
       await handleTarotSelect(interaction);
       return;
     }
+    if (interaction.isStringSelectMenu() && String(interaction.customId || '').startsWith('text:set:')) {
+      await handleTextSelect(interaction);
+      return;
+    }
     if (interaction.isModalSubmit() && String(interaction.customId || '').startsWith('kabbak-tarot-')) {
       await handleTarotModal(interaction);
+      return;
+    }
+    if (interaction.isModalSubmit() && String(interaction.customId || '').startsWith('kabbak-text-')) {
+      await handleTextModal(interaction);
       return;
     }
     if (interaction.isModalSubmit() && interaction.customId === 'kabbak-api-login') {
