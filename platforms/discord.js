@@ -300,7 +300,21 @@ function verseChoices(verses, draft) {
     .setDefault(row.value === selected));
 }
 
+function isMenuOwner(interaction) {
+  const owner = interaction.message?.interaction?.user?.id
+    || interaction.message?.interactionMetadata?.user?.id
+    || '';
+  return !owner || owner === interaction.user?.id;
+}
+
+async function rejectStranger(interaction) {
+  if (isMenuOwner(interaction)) return false;
+  await interaction.reply({ content: 'This menu is for the person who opened it.', ephemeral: true }).catch(() => {});
+  return true;
+}
+
 async function handleTextButton(interaction) {
+  if (await rejectStranger(interaction)) return;
   const userId = userIdFrom(interaction);
   const customId = String(interaction.customId || '');
   const draft = textDraft(userId);
@@ -345,17 +359,7 @@ async function handleTextButton(interaction) {
         },
         prefix: PREFIX,
       });
-    if (savedPrivate) {
-      await editDispatchResult(interaction, result);
-      return;
-    }
-    const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
-    const posted = await postPublic(interaction, items);
-    if (!posted) {
-      await editDispatchResult(interaction, result);
-      return;
-    }
-    await dismissEphemeral(interaction);
+    await editDispatchResult(interaction, result);
     return;
   }
   const privateReply = require('../lib/user-store').getReplyVisibility(userId) === 'private';
@@ -365,6 +369,7 @@ async function handleTextButton(interaction) {
 }
 
 async function handleTextSelect(interaction) {
+  if (await rejectStranger(interaction)) return;
   const draft = textDraft(userIdFrom(interaction));
   const key = String(interaction.customId || '').split(':')[2];
   const value = interaction.values?.[0] === '-' ? '' : (interaction.values?.[0] || '');
@@ -405,6 +410,7 @@ async function handleTextModal(interaction) {
 }
 
 async function handleTarotButton(interaction) {
+  if (await rejectStranger(interaction)) return;
   const userId = userIdFrom(interaction);
   const customId = String(interaction.customId || '');
   const draft = tarotDraft(userId);
@@ -449,17 +455,7 @@ async function handleTarotButton(interaction) {
       },
       prefix: PREFIX,
     });
-    if (ephemeral) {
-      await editDispatchResult(interaction, result);
-      return;
-    }
-    const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
-    const posted = await postPublic(interaction, items);
-    if (!posted) {
-      await editDispatchResult(interaction, result);
-      return;
-    }
-    await dismissEphemeral(interaction);
+    await editDispatchResult(interaction, result);
     return;
   }
   const subcommand = customId.split(':')[2];
@@ -476,6 +472,7 @@ async function handleTarotButton(interaction) {
 }
 
 async function handleTarotSelect(interaction) {
+  if (await rejectStranger(interaction)) return;
   const draft = tarotDraft(userIdFrom(interaction));
   const key = String(interaction.customId || '').split(':')[2];
   const value = interaction.values?.[0] || '';
@@ -566,15 +563,6 @@ async function deliverResult(interaction, result, { ephemeral = false } = {}) {
   const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
   if (!items.length) {
     await interaction.editReply({ content: 'No result.', embeds: [], components: [] }).catch(() => {});
-    return;
-  }
-  if (ephemeral || shouldStayPrivate(result)) {
-    await showPrivate(interaction, items);
-    return;
-  }
-  const posted = await postPublic(interaction, items);
-  if (posted) {
-    await dismissEphemeral(interaction);
     return;
   }
   await showPrivate(interaction, items);
@@ -713,8 +701,9 @@ async function handleChatCommand(interaction) {
   const replyMode = String(options?.getString?.('mode') || optionValue(interaction, 'visibility') || '').toLowerCase();
   const savedPrivate = require('../lib/user-store').getReplyVisibility(userIdFrom(interaction)) === 'private';
   const outputPrivate = replyMode === 'private' || (replyMode !== 'public' && savedPrivate);
+  const ephemeral = outputPrivate || group === 'api' || subcommand === 'config';
   try {
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ ephemeral });
   } catch (error) {
     if (error?.code === 10062) {
       console.warn(`[discord] ${commandName} already handled elsewhere (another bot instance?)`);
@@ -740,7 +729,7 @@ async function handleChatCommand(interaction) {
       return;
     }
 
-    await deliverResult(interaction, result, { ephemeral: outputPrivate });
+    await deliverResult(interaction, result, { ephemeral });
   } catch (err) {
     console.error(err);
     await interaction.editReply({ content: `Error: ${err.message}` }).catch(() => {});
