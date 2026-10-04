@@ -546,13 +546,14 @@ function dispatchPayload(item) {
   const files = item?.attachment?.buffer
     ? [new AttachmentBuilder(item.attachment.buffer, { name: item.attachment.name || 'image.jpg' })]
     : [];
+  const components = item?.buttons?.length ? buttonRows(item.buttons) : [];
   const content = plainContent(item);
-  if (content) return { content, embeds: [], components: [], files };
+  if (content) return { content, embeds: [], components, files };
   const embeds = toEmbeds(item);
   if (!embeds.length && files.length) {
-    return { content: '', embeds: [], components: [], files };
+    return { content: '', embeds: [], components, files };
   }
-  return { content: '', embeds, components: [], files };
+  return { content: '', embeds, components, files };
 }
 
 async function editDispatchResult(interaction, result) {
