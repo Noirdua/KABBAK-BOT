@@ -5,6 +5,8 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
   ModalBuilder,
   TextInputBuilder,
   TextInputStyle,
@@ -12,10 +14,84 @@ const {
 } = require('discord.js');
 const { accountId } = require('../lib/user-store');
 const { asList, truncate } = require('../lib/cards');
-const { suggest } = require('../lib/catalog');
+const { suggest, getSpreadOptions, getDeckOptions } = require('../lib/catalog');
 const { dispatch, completeApiLogin, answerQuiz } = require('../lib/commands');
 
 const PREFIX = '/kabbak';
+const tarotDrafts = new Map();
+
+function tarotDraft(userId) {
+  if (!tarotDrafts.has(userId)) {
+    tarotDrafts.set(userId, {
+      spread: 'three-card',
+      deck: '',
+      template: '',
+      stitch: true,
+      reversed: false,
+      private: false,
+    });
+  }
+  return tarotDrafts.get(userId);
+}
+
+function selectChoices(items, selected, labelOf, valueOf) {
+  const rows = [{ label: 'Default', value: '-' }];
+  items.slice(0, 24).forEach((item) => {
+    const value = String(valueOf(item) || '').trim().slice(0, 100);
+    if (!value || rows.some((row) => row.value === value)) return;
+    rows.push({
+      label: String(labelOf(item) || value).slice(0, 100),
+      value,
+    });
+  });
+  const picked = selected && rows.some((row) => row.value === selected) ? selected : '-';
+  return rows.slice(0, 25).map((row) => new StringSelectMenuOptionBuilder()
+    .setLabel(row.label || row.value)
+    .setValue(row.value)
+    .setDefault(row.value === picked));
+}
+
+function selectRow(customId, placeholder, choices) {
+  return new ActionRowBuilder().addComponents(
+    new StringSelectMenuBuilder()
+      .setCustomId(customId)
+      .setPlaceholder(placeholder)
+      .setMinValues(1)
+      .setMaxValues(1)
+      .addOptions(choices)
+  );
+}
+
+async function tarotDrawRows(draft) {
+  const spreads = await getSpreadOptions().catch(() => []);
+  const decks = await getDeckOptions().catch(() => []);
+  const templates = require('../lib/spread-templates').listTemplates();
+  const toggles = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId('tarot:toggle:stitch').setLabel(draft.stitch ? 'Stitch: on' : 'Stitch: off').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('tarot:toggle:reversed').setLabel(draft.reversed ? 'Reversed: on' : 'Reversed: off').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('tarot:toggle:private').setLabel(draft.private ? 'Private' : 'Public').setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId('tarot:run:draw').setLabel('Draw').setStyle(ButtonStyle.Primary)
+  );
+  return [
+    selectRow('tarot:set:spread', 'Spread', selectChoices(spreads, draft.spread, (item) => item.label || item.name || item.id, (item) => item.id)),
+    selectRow('tarot:set:deck', 'Deck', selectChoices(decks, draft.deck, (item) => item.label || item.name || item.id, (item) => item.id)),
+    selectRow('tarot:set:template', 'Template', selectChoices(templates, draft.template, (item) => item.name || item.id, (item) => item.id)),
+    toggles,
+  ];
+}
+
+function tarotTextModal(customId, title, fieldId, label, required) {
+  const modal = new ModalBuilder().setCustomId(customId).setTitle(title);
+  modal.addComponents(new ActionRowBuilder().addComponents(
+    new TextInputBuilder()
+      .setCustomId(fieldId)
+      .setLabel(label)
+      .setStyle(TextInputStyle.Short)
+      .setRequired(required)
+      .setMaxLength(80)
+  ));
+  return modal;
+}
 
 function userIdFrom(interaction) {
   return accountId('discord', interaction.user?.id);
@@ -148,6 +224,118 @@ async function handleAutocomplete(interaction) {
   } catch (error) {
     console.error('[discord] autocomplete failed:', error?.message || error);
     await interaction.respond([]).catch(() => {});
+  }
+}
+
+async function handleTarotButton(interaction) {
+  const userId = userIdFrom(interaction);
+  const customId = String(interaction.customId || '');
+  const draft = tarotDraft(userId);
+  if (customId === 'tarot:menu:card') {
+    await interaction.showModal(tarotTextModal('kabbak-tarot-card', 'Look up a card', 'name', 'Card name', true));
+    return;
+  }
+  if (customId === 'tarot:menu:cards') {
+    await interaction.showModal(tarotTextModal('kabbak-tarot-search', 'Search cards', 'query', 'Search text', false));
+    return;
+  }
+  if (customId === 'tarot:menu:draw') {
+    const rows = await tarotDrawRows(draft);
+    await interaction.update({
+      embeds: toEmbeds({ title: 'Draw', description: 'Set the options, then press Draw.' }),
+      components: rows,
+    }).catch(() => {});
+    return;
+  }
+  if (customId.startsWith('tarot:toggle:')) {
+    const key = customId.split(':')[2];
+    if (key === 'stitch' || key === 'reversed' || key === 'private') draft[key] = !draft[key];
+    await interaction.update({ components: await tarotDrawRows(draft) }).catch(() => {});
+    return;
+  }
+  if (customId === 'tarot:run:draw') {
+    const savedPrivate = require('../lib/user-store').getReplyVisibility(userId) === 'private';
+    await interaction.deferReply({ ephemeral: draft.private || savedPrivate });
+    const result = await dispatch({
+      userId,
+      group: 'tarot',
+      subcommand: 'draw',
+      args: {
+        spread: draft.spread && draft.spread !== '-' ? draft.spread : 'three-card',
+        deck: draft.deck && draft.deck !== '-' ? draft.deck : '',
+        template: draft.template && draft.template !== '-' ? draft.template : '',
+        stitch: draft.stitch,
+        reversed: draft.reversed,
+        visibility: draft.private ? 'private' : 'public',
+      },
+      prefix: PREFIX,
+    });
+    await sendDispatchResult(interaction, result);
+    return;
+  }
+  const subcommand = customId.split(':')[2];
+  await interaction.deferReply({ ephemeral: require('../lib/user-store').getReplyVisibility(userId) === 'private' });
+  const result = await dispatch({
+    userId,
+    group: 'tarot',
+    subcommand,
+    args: {},
+    prefix: PREFIX,
+  });
+  await sendDispatchResult(interaction, result);
+}
+
+async function handleTarotSelect(interaction) {
+  const draft = tarotDraft(userIdFrom(interaction));
+  const key = String(interaction.customId || '').split(':')[2];
+  const value = interaction.values?.[0] || '';
+  if (key === 'spread' || key === 'deck' || key === 'template') {
+    draft[key] = value === '-' ? '' : value;
+  }
+  await interaction.update({ components: await tarotDrawRows(draft) }).catch(() => {});
+}
+
+async function handleTarotModal(interaction) {
+  const userId = userIdFrom(interaction);
+  const savedPrivate = require('../lib/user-store').getReplyVisibility(userId) === 'private';
+  await interaction.deferReply({ ephemeral: savedPrivate });
+  const isSearch = interaction.customId === 'kabbak-tarot-search';
+  const result = isSearch
+    ? await dispatch({
+      userId,
+      group: 'tarot',
+      subcommand: 'cards',
+      args: { query: interaction.fields.getTextInputValue('query') },
+      prefix: PREFIX,
+    })
+    : await dispatch({
+      userId,
+      group: 'tarot',
+      subcommand: 'card',
+      args: { name: interaction.fields.getTextInputValue('name') },
+      prefix: PREFIX,
+    });
+  await sendDispatchResult(interaction, result);
+}
+
+async function sendDispatchResult(interaction, result) {
+  const items = asList(result).filter((item) => item && item.type !== 'collect-secret');
+  if (!items.length) {
+    await interaction.editReply({ content: 'No result.' }).catch(() => {});
+    return;
+  }
+  for (let i = 0; i < items.length; i += 1) {
+    const item = items[i];
+    const files = item?.attachment?.buffer
+      ? [new AttachmentBuilder(item.attachment.buffer, { name: item.attachment.name || 'image.jpg' })]
+      : [];
+    const embeds = toEmbeds(item);
+    const components = item.buttons?.length ? buttonRows(item.buttons) : [];
+    const payload = !embeds.length && files.length
+      ? { files, components: [] }
+      : { embeds, components, files };
+    const send = i === 0 ? interaction.editReply(payload) : interaction.followUp(payload);
+    await send.catch(() => {});
   }
 }
 
@@ -309,11 +497,24 @@ async function start() {
       return;
     }
     if (interaction.isButton()) {
-      if (String(interaction.customId || '').startsWith('config:')) {
+      const customId = String(interaction.customId || '');
+      if (customId.startsWith('config:')) {
         await handleConfigButton(interaction);
         return;
       }
+      if (customId.startsWith('tarot:')) {
+        await handleTarotButton(interaction);
+        return;
+      }
       await handleQuizButton(interaction);
+      return;
+    }
+    if (interaction.isStringSelectMenu() && String(interaction.customId || '').startsWith('tarot:set:')) {
+      await handleTarotSelect(interaction);
+      return;
+    }
+    if (interaction.isModalSubmit() && String(interaction.customId || '').startsWith('kabbak-tarot-')) {
+      await handleTarotModal(interaction);
       return;
     }
     if (interaction.isModalSubmit() && interaction.customId === 'kabbak-api-login') {

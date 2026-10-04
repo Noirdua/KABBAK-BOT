@@ -20,7 +20,7 @@ function addVisibilityOption(option) {
   if (Array.isArray(option.options)) {
     option.options = option.options.map(addVisibilityOption);
   }
-  if (option.type === 1 && option.name !== 'reply' && option.name !== 'login') {
+  if (option.type === 1 && option.name !== 'reply' && option.name !== 'login' && option.name !== 'config' && option.name !== 'tarot') {
     const options = Array.isArray(option.options) ? option.options : [];
     if (!options.some((entry) => entry.name === 'visibility')) {
       option.options = [...options, VISIBILITY_OPTION];
@@ -233,103 +233,9 @@ const commands = [
         ],
       },
       {
-        type: 2,
+        type: 1,
         name: 'tarot',
-        description: 'Tarot cards and spreads',
-        options: [
-          {
-            type: 1,
-            name: 'draw',
-            description: 'Draw cards from a spread (default: three-card)',
-            options: [
-              {
-                name: 'spread',
-                type: 3,
-                description: 'Spread (type to search)',
-                required: false,
-                autocomplete: true,
-              },
-              {
-                name: 'deck',
-                type: 3,
-                description: 'Deck art (type to search)',
-                required: false,
-                autocomplete: true,
-              },
-              {
-                name: 'stitch',
-                type: 5,
-                description: 'One image with cards and meanings (default on; false = separate cards)',
-                required: false,
-              },
-              {
-                name: 'reversed',
-                type: 5,
-                description: 'Allow reversed cards (default off)',
-                required: false,
-              },
-              {
-                name: 'template',
-                type: 3,
-                description: 'Print template (atelier, or a shared .svg/.json)',
-                required: false,
-                autocomplete: true,
-              },
-            ],
-          },
-          {
-            type: 1,
-            name: 'card',
-            description: 'Look up a single tarot card with its image',
-            options: [
-              {
-                name: 'name',
-                type: 3,
-                description: 'Card (type to search the full card library)',
-                required: true,
-                autocomplete: true,
-              },
-              {
-                name: 'deck',
-                type: 3,
-                description: 'Deck art (type to search)',
-                required: false,
-                autocomplete: true,
-              },
-            ],
-          },
-          {
-            type: 1,
-            name: 'cards',
-            description: 'List or search the card library',
-            options: [
-              {
-                name: 'query',
-                type: 3,
-                description: 'Optional search text (autocompletes from the card library)',
-                required: false,
-                autocomplete: true,
-              },
-              {
-                name: 'deck',
-                type: 3,
-                description: 'Deck art (type to search)',
-                required: false,
-                autocomplete: true,
-              },
-            ],
-          },
-          {
-            type: 1,
-            name: 'spreads',
-            description: 'List available spreads',
-          },
-          {
-            type: 1,
-            name: 'templates',
-            description: 'List spread print templates',
-          },
-        ],
+        description: 'Tarot menu: draw, look up a card, search, spreads, and templates',
       },
       {
         type: 2,
