@@ -73,6 +73,23 @@ const commands = [
       },
       {
         type: 1,
+        name: 'shem',
+        description: 'Shem HaMephorash angel, with its decan, tarot card, and Enochian letters',
+        options: [
+          { name: 'query', type: 3, description: 'Number or name (e.g. 1 or Vehuiah). Omit to list all 72.', required: false },
+        ],
+      },
+      {
+        type: 1,
+        name: 'relations',
+        description: 'Correspondence graph for a kind and id (shem-angel, tarot-card, enochian-letter, …)',
+        options: [
+          { name: 'kind', type: 3, description: 'Entity kind, e.g. shem-angel or tarot-card', required: true },
+          { name: 'id', type: 3, description: 'Entity id, e.g. 01 or 2 of wands', required: true },
+        ],
+      },
+      {
+        type: 1,
         name: 'quiz',
         description: 'Quiz menu: pick a category, 4 or 5 questions, then answer from dropdowns',
       },

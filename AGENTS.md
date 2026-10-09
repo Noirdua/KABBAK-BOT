@@ -39,6 +39,7 @@ Endpoints used (keep names/shapes; see `../KABBAK-API/AGENTS.md` for the source 
 - `GET /iching` → `{ hexagrams: [{ number, name }] }`, `GET /iching/hexagrams/:number`
 - `GET /texts` → `{ sources: [...] }`, `GET /texts/search`, `GET /texts/:sourceId/works/:workId/sections/:sectionId`
 - `GET /tattvas`, `GET /tattvas/:id`, `GET /gematria/words`, `GET /correspondences/:kind/:id`, `GET /locations/*`, `GET /quiz/*`
+- `GET /kabbalah/shemhamphorash` (`{ meta, choirs, angels }`), `GET /kabbalah/shemhamphorash/:value` (number, name, or Hebrew). Angels carry `quinance`, `tarot.minorArcana`, `tarot.majorArcana`, and `enochianLetterIds`. Reverse links use `GET /correspondences/shem-angel/:id` and `GET /correspondences/tarot-card/:id`.
 - `GET /assets/<path>` — media tags may pass `?apiKey=` (headers elsewhere)
 
 **Deck systems:** `GET /decks/options` items carry `system` (`tarot`, `iching`, `playing-cards`, …). Tarot-only features (spreads, tarot card image lookups) must filter out non-`tarot` decks so a hexagram or playing-card deck never resolves a tarot card.
